@@ -2,11 +2,11 @@ package slogx_test
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"testing"
 
 	"github.com/powerman/check"
-	"golang.org/x/exp/slog"
 
 	"github.com/powerman/slogx"
 )
@@ -16,7 +16,11 @@ func TestContext(tt *testing.T) {
 
 	t.Nil(slogx.FromContext(context.Background()))
 
-	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	ctx := slogx.NewContext(context.Background(), log)
+	var log *slog.Logger
+	ctx := slogx.NewContext(context.Background(), nil)
+	t.Equal(slogx.FromContext(ctx), log)
+
+	log = slog.New(slog.NewTextHandler(os.Stdout, nil))
+	ctx = slogx.NewContext(context.Background(), log)
 	t.Equal(slogx.FromContext(ctx), log)
 }

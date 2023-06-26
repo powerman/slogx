@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         go:
-          - '1.21rc2' # Also used for goveralls.
+          - '1.21.0-rc.2' # Also used for goveralls.
           - 'tip'
 
     steps:
@@ -58,5 +58,5 @@ jobs:
       - name: Report code coverage
         env:
           COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
-        if: env.COVERALLS_TOKEN && matrix.go == '1.21rc2'
+        if: env.COVERALLS_TOKEN && matrix.go == '1.21.0-rc.2'
         run: .buildcache/bin/goveralls -service=GitHub

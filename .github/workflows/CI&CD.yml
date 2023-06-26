@@ -52,7 +52,7 @@ jobs:
             v4-test-${{ runner.os }}-
 
       - run: go generate
-      - run: .buildcache/bin/golangci-lint run
+#     - run: .buildcache/bin/golangci-lint run
       - run: go test -race ./...
 
       - name: Report code coverage

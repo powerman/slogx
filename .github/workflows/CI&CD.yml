@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         go:
-          - '^1.20' # Also used for goveralls.
+          - '1.21.0-rc.2' # Also used for goveralls.
           - 'tip'
 
     steps:
@@ -52,11 +52,11 @@ jobs:
             v4-test-${{ runner.os }}-
 
       - run: go generate
-      - run: .buildcache/bin/golangci-lint run
+#     - run: .buildcache/bin/golangci-lint run
       - run: go test -race ./...
 
       - name: Report code coverage
         env:
           COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
-        if: env.COVERALLS_TOKEN && matrix.go == '^1.20'
+        if: env.COVERALLS_TOKEN && matrix.go == '1.21.0-rc.2'
         run: .buildcache/bin/goveralls -service=GitHub

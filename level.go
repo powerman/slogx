@@ -5,20 +5,22 @@ import (
 	"strings"
 )
 
-// ParseLevel convert levelName from flag or config file into slog.Level.
+// ParseLevel converts log level name into slog.Level.
+// It is case insensitive, ignores surrounding spaces
+// and accepts shortened level name. In case of unacceptable
+// log level name it will use default slog.LevelDebug.
 func ParseLevel(levelName string) slog.Level {
 	switch strings.ToLower(strings.TrimSpace(levelName)) {
-	case "err", "error", "fatal", "crit", "critical", "alert", "emerg", "emergency":
+	case "err", "error":
 		return slog.LevelError
 	case "wrn", "warn", "warning":
 		return slog.LevelWarn
-	case "inf", "info", "notice":
+	case "inf", "info":
 		return slog.LevelInfo
-	case "dbg", "debug", "trace":
+	case "dbg", "debug":
 		return slog.LevelDebug
 
 	default:
-		slog.Debug("failed", "levelName", levelName) // Will be changed to use custom DefaultLogger.
 		return slog.LevelDebug
 	}
 }

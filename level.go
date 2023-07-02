@@ -7,8 +7,8 @@ import (
 
 // ParseLevel converts log level name into slog.Level.
 // It is case insensitive, ignores surrounding spaces
-// and accepts shortened level name. In case of unacceptable
-// log level name it will use default slog.LevelDebug.
+// and accepts shortened level name. In case of unknown
+// log level name it will return slog.LevelDebug.
 func ParseLevel(levelName string) slog.Level {
 	switch strings.ToLower(strings.TrimSpace(levelName)) {
 	case "err", "error":

@@ -19,8 +19,8 @@ func TestParseLevel(tt *testing.T) {
 	}{
 		{"Err", slog.LevelError},
 		{"error ", slog.LevelError},
-		{"wrn", slog.LevelWarn},
-		{"warn", slog.LevelWarn},
+		{" wrn", slog.LevelWarn},
+		{" warn ", slog.LevelWarn},
 		{"warning", slog.LevelWarn},
 		{"inf", slog.LevelInfo},
 		{"info", slog.LevelInfo},

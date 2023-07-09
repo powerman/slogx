@@ -27,6 +27,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           check-latest: true
+          cache: false
 
       - name: Install Go tip
         if: matrix.go == 'tip'
@@ -36,16 +37,15 @@ jobs:
           echo "GOROOT=$HOME/gotip" >> $GITHUB_ENV
           echo "$HOME/gotip/bin" >> $GITHUB_PATH
 
-      - name: Setup cache for Go tip
+      - name: Setup cache for Go
         uses: actions/cache@v3
-        if: matrix.go == 'tip'
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: v1-go-${{ runner.os }}-tip-${{ hashFiles('go.sum') }}
+          key: v1-go-${{ runner.os }}-${{ matrix.go }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            v1-go-${{ runner.os }}-tip-
+            v1-go-${{ runner.os }}-${{ matrix.go }}-
 
       - run: go version
 

@@ -48,8 +48,6 @@ jobs:
             v1-go-${{ runner.os }}-tip-
 
       - run: go version
-      - run: go env
-      - run: pwd
 
       - name: Setup cache for tools
         uses: actions/cache@v3

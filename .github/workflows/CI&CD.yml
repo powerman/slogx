@@ -36,16 +36,30 @@ jobs:
           echo "GOROOT=$HOME/gotip" >> $GITHUB_ENV
           echo "$HOME/gotip/bin" >> $GITHUB_PATH
 
-      - run: go version
+      - name: Setup cache for Go tip
+        uses: actions/cache@v3
+        if: matrix.go == 'tip'
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: v1-go-${{ runner.os }}-tip-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            v1-go-${{ runner.os }}-tip-
 
-      - uses: actions/cache@v3
+      - run: go version
+      - run: go env
+      - run: pwd
+
+      - name: Setup cache for tools
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cache/golangci-lint
             .buildcache
-          key: v5-test-${{ runner.os }}-${{ hashFiles('tools.go') }}
+          key: v1-tools-${{ runner.os }}-${{ matrix.go }}-${{ hashFiles('tools.go') }}
           restore-keys: |
-            v5-test-${{ runner.os }}-
+            v1-tools-${{ runner.os }}-${{ matrix.go }}-
 
       - run: go generate
 #     - run: .buildcache/bin/golangci-lint run

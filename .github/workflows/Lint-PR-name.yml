@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: npm install @commitlint/config-conventional
 
       - uses: JulienKode/pull-request-name-linter-action@v0.5.0

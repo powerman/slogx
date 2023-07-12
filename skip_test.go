@@ -18,11 +18,16 @@ func TestLogSkip(tt *testing.T) {
 
 	var buf bytes.Buffer
 	ctx := context.Background()
-	slogx.LogSkip(ctx, 0, slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true}), slog.Level(8), "message", "err", io.EOF)
-	t.Match(buf.String(), "level=ERROR source=.*/slogx/skip_test.go:21 msg=message err=EOF")
+	h := slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true, Level: slog.Level(8)})
+
+	slogx.LogSkip(ctx, 0, h, slog.Level(4), "message", "err", io.EOF)
+	t.Len(buf.String(), 0)
+
+	slogx.LogSkip(ctx, 0, h, slog.Level(8), "message", "err", io.EOF)
+	t.Match(buf.String(), "level=ERROR source=.*/slogx/skip_test.go:26 msg=message err=EOF")
 
 	buf.Truncate(0)
-	slogx.LogSkip(ctx, 1, slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true}), slog.Level(8), "message", "err", io.EOF)
+	slogx.LogSkip(ctx, 1, h, slog.Level(8), "message", "err", io.EOF)
 	t.Match(buf.String(), "level=ERROR source=.*/testing/testing.go:1595 msg=message err=EOF")
 }
 
@@ -32,10 +37,15 @@ func TestLogAttrsSkip(tt *testing.T) {
 
 	var buf bytes.Buffer
 	ctx := context.Background()
-	slogx.LogAttrsSkip(ctx, 0, slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true}), slog.Level(0), "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
-	t.Match(buf.String(), "level=INFO source=.*/slogx/skip_test.go:35 msg=message ID=18")
+	h := slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true, Level: slog.Level(4)})
+
+	slogx.LogAttrsSkip(ctx, 0, h, slog.Level(0), "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
+	t.Len(buf.String(), 0)
+
+	slogx.LogAttrsSkip(ctx, 0, h, slog.Level(4), "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
+	t.Match(buf.String(), "level=WARN source=.*/slogx/skip_test.go:45 msg=message ID=18")
 
 	buf.Truncate(0)
-	slogx.LogAttrsSkip(ctx, 1, slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true}), slog.Level(0), "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
-	t.Match(buf.String(), "level=INFO source=.*/testing/testing.go:1595 msg=message ID=18")
+	slogx.LogAttrsSkip(ctx, 1, h, slog.Level(4), "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
+	t.Match(buf.String(), "level=WARN source=.*/testing/testing.go:1595 msg=message ID=18")
 }

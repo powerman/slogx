@@ -3,7 +3,6 @@ name: CI/CD
 on:
   push:
     branches: master
-    tags: v*
   pull_request:
     branches: master
   schedule:
@@ -12,7 +11,7 @@ on:
 jobs:
 
   test:
-    runs-on: 'ubuntu-latest'
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       matrix:
@@ -21,10 +20,14 @@ jobs:
           - 'tip'
 
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-go@v4
         if: matrix.go != 'tip'
         with:
           go-version: ${{ matrix.go }}
+          check-latest: true
+          cache: false
 
       - name: Install Go tip
         if: matrix.go == 'tip'
@@ -36,22 +39,22 @@ jobs:
 
       - run: go version
 
-      - uses: actions/checkout@v3
-
       - uses: actions/cache@v3
+        id: cache-go-with-tools
         with:
           path: |
-            ~/go/bin
-            ~/go/pkg
-            ~/go/src
+            ~/go/pkg/mod
             ~/.cache/go-build
             ~/.cache/golangci-lint
             .buildcache
-          key: v4-test-${{ runner.os }}-${{ hashFiles('go.mod') }}-${{ hashFiles('tools.go') }}
+          key: v1-go-with-tools-${{ runner.os }}-${{ matrix.go }}-${{ hashFiles('tools.go') }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            v4-test-${{ runner.os }}-
+            v1-go-with-tools-${{ runner.os }}-${{ matrix.go }}-${{ hashFiles('tools.go') }}-
+            v1-go-with-tools-${{ runner.os }}-${{ matrix.go }}-
 
       - run: go generate
+        if: steps.cache-go-with-tools.outputs.cache-hit != 'true'
+
 #     - run: .buildcache/bin/golangci-lint run
       - run: go test -race ./...
 

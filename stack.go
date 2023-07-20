@@ -1,30 +1,25 @@
 package slogx
 
 import (
-	"fmt"
+	"bytes"
 	"log/slog"
 	"runtime"
-	"strings"
 )
 
-const (
-	KeyStack = "stack"
-	trim     = 3
-)
+const KeyStack = "stack"
 
 // Stack returns a stack trace formatted as panic output.
-// It excludes a call of slogx.Stack() itself.
+// It excludes a call of Stack() itself.
 func Stack() slog.Attr {
-	buf := make([]byte, 2048)
-	runtime.Stack(buf, false)
+	const size = 64 << 10
+	buf := make([]byte, size)
+	buf = buf[:runtime.Stack(buf, false)]
 
-	s := strings.Split(string(buf), "\n")
-	var stack string
-	if len(s) > trim {
-		for _, line := range s[trim : len(s)-1] {
-			stack += fmt.Sprintf("%s\n", line)
-		}
-		stack = stack[:len(stack)-1]
-	}
-	return slog.Attr{Key: KeyStack, Value: slog.StringValue(stack)}
+	line1 := bytes.IndexRune(buf, '\n')
+	line2 := bytes.IndexRune(buf[line1+1:], '\n')
+	line3 := bytes.IndexRune(buf[line1+1+line2+1:], '\n')
+	copy(buf[line2+1+line3+1:], buf[:line1+1])
+	buf = buf[line2+1+line3+1:]
+
+	return slog.Attr{Key: KeyStack, Value: slog.StringValue(string(buf[:len(buf)-1]))}
 }

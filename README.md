@@ -5,3 +5,6 @@
 [![Coverage Status](https://coveralls.io/repos/github/powerman/slogx/badge.svg?branch=master)](https://coveralls.io/github/powerman/slogx?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/powerman/slogx)](https://goreportcard.com/report/github.com/powerman/slogx)
 [![Release](https://img.shields.io/github/v/release/powerman/slogx)](https://github.com/powerman/slogx/releases/latest)
+
+# Recommendations
+ Disable non-Ctx slog functions (e.g. slog.Info) and methods using linter.

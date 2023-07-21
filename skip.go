@@ -12,6 +12,9 @@ import (
 // Value skip=0 works exactly like (*slog.Logger).Log,
 // value skip=1 skips caller of LogSkip() etc.
 func LogSkip(ctx context.Context, skip int, handler slog.Handler, level slog.Level, msg string, args ...any) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if !handler.Enabled(ctx, level) {
 		return
 	}
@@ -19,9 +22,6 @@ func LogSkip(ctx context.Context, skip int, handler slog.Handler, level slog.Lev
 	runtime.Callers(2+skip, pcs[:])
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
 	r.Add(args...)
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	_ = handler.Handle(ctx, r)
 }
 
@@ -30,6 +30,9 @@ func LogSkip(ctx context.Context, skip int, handler slog.Handler, level slog.Lev
 // Value skip=0 works exactly like (*slog.Logger).Log,
 // value skip=1 skips caller of LogSkip() etc.
 func LogAttrsSkip(ctx context.Context, skip int, handler slog.Handler, level slog.Level, msg string, attrs ...slog.Attr) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if !handler.Enabled(ctx, level) {
 		return
 	}
@@ -37,8 +40,5 @@ func LogAttrsSkip(ctx context.Context, skip int, handler slog.Handler, level slo
 	runtime.Callers(2+skip, pcs[:])
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
 	r.AddAttrs(attrs...)
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	_ = handler.Handle(ctx, r)
 }

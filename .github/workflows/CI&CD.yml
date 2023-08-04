@@ -52,7 +52,7 @@ jobs:
             v1-go-with-tools-${{ runner.os }}-${{ matrix.go }}-${{ hashFiles('tools.go') }}-
             v1-go-with-tools-${{ runner.os }}-${{ matrix.go }}-
 
-      - run: go generate
+      - run: go generate -tags tools
         if: steps.cache-go-with-tools.outputs.cache-hit != 'true'
 
 #     - run: .buildcache/bin/golangci-lint run

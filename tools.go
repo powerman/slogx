@@ -1,4 +1,4 @@
-//go:build tools
+//go:build generate
 
 //go:generate mkdir -p .buildcache/bin
 //go:generate -command GOINSTALL env "GOBIN=$PWD/.buildcache/bin" go install

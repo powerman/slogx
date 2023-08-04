@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"testing"
 
-	gomock "github.com/golang/mock/gomock"
+	"github.com/golang/mock/gomock"
 	"github.com/powerman/check"
 
 	"github.com/powerman/slogx"

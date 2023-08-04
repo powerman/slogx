@@ -1,6 +1,6 @@
 package slogx_test
 
-//go:generate mockgen -package=slogx -source=XXX/log/slog/handler.go -destination=mock.handler.go Handler
+//go:generate mockgen -destination=mock.handler.go -package=slogx log/slog Handler
 
 import (
 	"bytes"

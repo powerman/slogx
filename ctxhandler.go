@@ -5,68 +5,87 @@ import (
 	"log/slog"
 )
 
-const KeyBadCtx = "!BADCTX"
-
-// CtxHandler is an slog.Handler provided for use through ctx.
-// It optionally reports !BADCTX if there is no handler in ctx.
+// CtxHandler is used as a default logger.
+// It applies for applications only (not for libraries).
+//
+// Usually we used logger stored in ctx. We had to extract it first.
+// It took us one extra line in every function:
+//
+//	log := structlog.FromContext(s.ctx, nil)
+//	log.Info("some message",...)
+//
+// With CtxHandler we minimise it.
+// In main we should set CtxHandler as a default for a global logger:
+//
+//	slogx.SetDefaultCtxHandler(fallback, opts)
+//
+// By convention we do not change Default logger after.
+// Now we log anywhere in code with just one line:
+//
+//	slog.InfoContext(ctx, "some message",...))
+//
+// We recommend not to add attributes/groups on global logger.
+// All Attributes and Groups you should apply on handler, stored in ctx:
+//
+//	handler = handler.WithGroup("solar")
+//	handler = handler.WithAttrs([]slog.Attr{slog.Int("earth", 3)})
+//	ctx = slogx.NewContext(ctx, handler)
+//	slog.InfoContext(ctx, "greet")
+//
+// Spawning a new logger using With or WithGrop will cause these settings
+// to be applied after the settings of handler stored in ctx:
+//
+//	log := slog.New(slog.NewTextHandler(os.Stderr, nil)).With(slog.Int("top", 20))
+//
+//	handler.WithAttrs([]slog.Attr{slog.Int("top", 10)})
+//	log.InfoContext(slogx.NewContext(ctx, handler), "list")
+//
+// Output:
+//
+//	... level=INFO msg=list top=20
+//
+// By convention such logger must not be carried by stack neither in ctx nor in parameters.
+//
+// CtxHandler optionally reports !BADCTX with the address of current ctx
+// if there is no handler in it.
 type CtxHandler struct {
 	ignoreBADCTX bool
 	handler      slog.Handler
 }
 
-// CtxHandlerOption are options for a CtxHandler.
+// CtxHandlerOption is an option for a CtxHandler.
 type ctxHandlerOption func(*CtxHandler)
 
-// NewCtxHandler creates a CtxHandler from fallback, using the given options.
-// If opts is nil, the default options are used.
-func NewCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) *CtxHandler {
-	ctxHandler := &CtxHandler{
-		handler: fallback,
-	}
-	for _, opt := range opts {
-		opt(ctxHandler)
-	}
-	return ctxHandler
+// SetDefaultCtxHandler sets a CtxHandler as a default logger.
+// It applies given options. If opts is nil, the default options are used.
+func SetDefaultCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) {
+	panic("TODO")
 }
 
 // Enabled works as (slog.Handler).Enabled.
-// It uses handler returned by FromContext if exists or fallback handler.
+// It uses handler returned by FromContext or fallback handler.
 func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
-	handler := FromContext(ctx)
-	if handler != nil {
-		return handler.Enabled(ctx, l)
-	}
-	return h.handler.Enabled(ctx, l)
+	panic("TODO")
 }
 
 // Handle works as (slog.Handler).Handler.
-// It uses handler returned by FromContext if exists or fallback handler.
+// It uses handler returned by FromContext or fallback handler.
 // Optionally add !BADCTX attr if FromContext returns nil.
 func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
-	handler := FromContext(ctx)
-	if handler == nil {
-		handler = h.handler
-		if !h.ignoreBADCTX {
-			handler = handler.WithAttrs([]slog.Attr{{Key: KeyBadCtx, Value: slog.StringValue("missing handler")}})
-		}
-	}
-	// TODO realisation.
-	return nil
+	panic("TODO")
 }
 
 // WithAttrs works exactly like (slog.Handler).WithAttrs.
 func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return NewCtxHandler(h.handler.WithAttrs(attrs))
+	panic("TODO")
 }
 
 // WithGroup works exactly like (slog.Handler).WithGroup.
 func (h *CtxHandler) WithGroup(name string) slog.Handler {
-	return NewCtxHandler(h.handler.WithGroup(name))
+	panic("TODO")
 }
 
 // LaxCtxHandler is an option for disable adding !BADCTX attr.
 func LaxCtxHandler() ctxHandlerOption {
-	return func(ctxHandler *CtxHandler) {
-		ctxHandler.ignoreBADCTX = true
-	}
+	panic("TODO")
 }

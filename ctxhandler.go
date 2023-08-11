@@ -8,10 +8,10 @@ import (
 // CtxHandler is used as a default logger.
 // It applies for applications only (not for libraries).
 //
-// Usually we used logger stored in ctx. We had to extract it first.
-// It took us one extra line in every function:
+// Usually we used logger stored in ctx. We had to extract it first
+// so it took us one extra line in every function:
 //
-//	log := structlog.FromContext(s.ctx, nil)
+//	log := structlog.FromContext(ctx, nil)
 //	log.Info("some message",...)
 //
 // With CtxHandler we minimise it.
@@ -27,18 +27,19 @@ import (
 // We recommend not to add attributes/groups on global logger.
 // All Attributes and Groups you should apply on handler, stored in ctx:
 //
-//	handler = handler.WithGroup("solar")
-//	handler = handler.WithAttrs([]slog.Attr{slog.Int("earth", 3)})
+//	handler = handler.WithGroup("g")
+//	handler = handler.WithAttrs([]slog.Attr{slog.Int("key", 3)})
 //	ctx = slogx.NewContext(ctx, handler)
-//	slog.InfoContext(ctx, "greet")
+//	slog.InfoContext(ctx, "message")
 //
 // Spawning a new logger using With or WithGrop will cause these settings
 // to be applied after the settings of handler stored in ctx:
 //
-//	log := slog.New(slog.NewTextHandler(os.Stderr, nil)).With(slog.Int("top", 20))
+//	log := slog.With(slog.Int("top", 20))
 //
-//	handler.WithAttrs([]slog.Attr{slog.Int("top", 10)})
-//	log.InfoContext(slogx.NewContext(ctx, handler), "list")
+//	handler = handler.WithAttrs([]slog.Attr{slog.Int("top", 10)})
+//	ctx = slogx.NewContext(ctx, handler)
+//	log.InfoContext(ctx, "list")
 //
 // Output:
 //
@@ -46,8 +47,7 @@ import (
 //
 // By convention such logger must not be carried by stack neither in ctx nor in parameters.
 //
-// CtxHandler optionally reports !BADCTX with the address of current ctx
-// if there is no handler in it.
+// CtxHandler optionally reports !BADCTX with ctx as a value if there is no handler in it.
 type CtxHandler struct {
 	ignoreBADCTX bool
 	handler      slog.Handler

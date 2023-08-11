@@ -35,17 +35,17 @@ func TestCtxHandler(tt *testing.T) {
 	h = slog.NewTextHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
 	ctx := slogx.NewContext(context.Background(), h)
 	slogx.SetDefaultCtxHandler(slog.NewTextHandler(&buf, nil))
-	slog.InfoCtx(ctx, "some message")
+	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2`)
 
 	buf.Truncate(0)
 	log := slog.With(slog.String("key1", "modified"))
-	log.InfoCtx(ctx, "some message")
+	log.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2 g.key1=modified`)
 
 	buf.Truncate(0)
 	log = log.WithGroup("g2").With(slog.String("key3", "value3"))
-	log.InfoCtx(ctx, "some message")
+	log.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2 g.key1=modified g.g2.key3=value3`)
 
 	// With JsonHandler
@@ -53,17 +53,17 @@ func TestCtxHandler(tt *testing.T) {
 	h = slog.NewJSONHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
 	ctx = slogx.NewContext(context.Background(), h)
 	slogx.SetDefaultCtxHandler(slog.NewJSONHandler(&buf, nil))
-	slog.InfoCtx(ctx, "some message")
+	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2"}}`)
 
 	buf.Truncate(0)
 	log = slog.With(slog.String("key1", "modified"))
-	log.InfoCtx(ctx, "some message")
+	log.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2","key1":"modified"}}`)
 
 	buf.Truncate(0)
 	log = log.WithGroup("g2").With(slog.String("key3", "value3"))
-	log.InfoCtx(ctx, "some message")
+	log.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2","key1":"modified","g2":{"key3":"value3"}}}`)
 }
 
@@ -75,11 +75,11 @@ func TestLaxCtxHandler(tt *testing.T) {
 	ctx := context.Background()
 	h := slog.NewTextHandler(&buf, nil).WithAttrs([]slog.Attr{slog.String("key1", "value1")})
 	slogx.SetDefaultCtxHandler(h)
-	slog.InfoCtx(ctx, "some message")
+	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" key1=value1 !BADCTX`)
 
 	buf.Truncate(0)
 	slogx.SetDefaultCtxHandler(h, slogx.LaxCtxHandler())
-	slog.InfoCtx(ctx, "some message")
+	slog.InfoContext(ctx, "some message")
 	t.NotMatch(buf.String(), "!BADCTX")
 }

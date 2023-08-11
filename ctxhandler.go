@@ -33,18 +33,7 @@ import (
 //	slog.InfoContext(ctx, "message")
 //
 // Spawning a new logger using With or WithGrop will cause these settings
-// to be applied after the settings of handler stored in ctx:
-//
-//	log := slog.With(slog.Int("top", 20))
-//
-//	handler = handler.WithAttrs([]slog.Attr{slog.Int("top", 10)})
-//	ctx = slogx.NewContext(ctx, handler)
-//	log.InfoContext(ctx, "list")
-//
-// Output:
-//
-//	... level=INFO msg=list top=20
-//
+// to be applied after the settings of handler stored in ctx.
 // By convention such logger must not be carried by stack neither in ctx nor in parameters.
 //
 // CtxHandler optionally reports !BADCTX with ctx as a value if there is no handler in it.

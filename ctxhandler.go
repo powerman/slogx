@@ -115,7 +115,7 @@ func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 
 // WithGroup works exactly like (slog.Handler).WithGroup.
 func (h *CtxHandler) WithGroup(name string) slog.Handler {
-	if len(name) == 0 {
+	if name == "" {
 		return h
 	}
 	ctxHandler := h.clone()
@@ -126,7 +126,7 @@ func (h *CtxHandler) WithGroup(name string) slog.Handler {
 }
 
 // LaxCtxHandler is an option for disable adding !BADCTX attr.
-func LaxCtxHandler() ctxHandlerOption {
+func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
 	return func(ctxHandler *CtxHandler) {
 		ctxHandler.ignoreBADCTX = true
 	}

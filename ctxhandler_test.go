@@ -38,39 +38,39 @@ func TestCtxHandler(tt *testing.T) {
 	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2`)
 
-	buf.Truncate(0)
+	buf.Reset()
 	log := slog.With(slog.String("key1", "modified"))
 	log.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2 g.key1=modified`)
 
-	buf.Truncate(0)
+	buf.Reset()
 	log = log.WithGroup("g2").With(slog.String("key3", "value3"))
 	log.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2 g.key1=modified g.g2.key3=value3`)
 
-	buf.Truncate(0)
+	buf.Reset()
 	slog.InfoContext(ctx, "some message", "key4", "value4")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2 g.key4=value4`)
 
 	// With JsonHandler
-	buf.Truncate(0)
+	buf.Reset()
 	h = slog.NewJSONHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
 	ctx = slogx.NewContext(context.Background(), h)
 	slogx.SetDefaultCtxHandler(slog.NewJSONHandler(&buf, nil))
 	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2"}}`)
 
-	buf.Truncate(0)
+	buf.Reset()
 	log = slog.With(slog.String("key1", "modified"))
 	log.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2","key1":"modified"}}`)
 
-	buf.Truncate(0)
+	buf.Reset()
 	log = log.WithGroup("g2").With(slog.String("key3", "value3"))
 	log.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2","key1":"modified","g2":{"key3":"value3"}}}`)
 
-	buf.Truncate(0)
+	buf.Reset()
 	slog.InfoContext(ctx, "some message", "key4", "value4")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2","key4":"value4"}}`)
 }
@@ -86,7 +86,7 @@ func TestLaxCtxHandler(tt *testing.T) {
 	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" key1=value1 !BADCTX`)
 
-	buf.Truncate(0)
+	buf.Reset()
 	slogx.SetDefaultCtxHandler(h, slogx.LaxCtxHandler())
 	slog.InfoContext(ctx, "some message")
 	t.NotMatch(buf.String(), "!BADCTX")

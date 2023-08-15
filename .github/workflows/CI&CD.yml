@@ -16,7 +16,8 @@ jobs:
     strategy:
       matrix:
         go:
-          - '1.21.0-rc.2' # Also used for goveralls.
+          # TODO Add 'oldstable' after 1.22.0 will be released.
+          - 'stable' # Also used for goveralls.
           - 'tip'
 
     steps:
@@ -55,11 +56,11 @@ jobs:
       - run: go generate tools.go
         if: steps.cache-go-with-tools.outputs.cache-hit != 'true'
 
-#     - run: .buildcache/bin/golangci-lint run
+      - run: .buildcache/bin/golangci-lint run
       - run: go test -race ./...
 
       - name: Report code coverage
         env:
           COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
-        if: env.COVERALLS_TOKEN && matrix.go == '1.21.0-rc.2'
+        if: env.COVERALLS_TOKEN && matrix.go == 'stable'
         run: .buildcache/bin/goveralls -service=GitHub

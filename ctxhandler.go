@@ -5,38 +5,77 @@ import (
 	"log/slog"
 )
 
-// CtxHandler is used as a default logger.
-// It applies for applications only (not for libraries).
+// CtxHandler provides a way to use slog.Handler stored in a context instead of slog.Logger.
+// This makes possible to store extra slog.Attr inside a context and make it magically work
+// without needs to get slog.Logger out of context each time you need to log something.
 //
-// Usually we used logger stored in ctx. We had to extract it first
-// so it took us one extra line in every function:
+// CtxHandler should be used as a default logger's handler. So it's useful only for
+// applications but not libraries - libraries shouldn't expect concrete configuration of
+// default logger and can't expect availability of CtxHandler's features.
 //
-//	log := structlog.FromContext(ctx, nil)
-//	log.Info("some message",...)
+// Usually when we need a context-specific logging we have to store pre-configured logger
+// inside a context. But then everywhere we need to log something we have to get logger
+// from context first, which is annoying. Also it means we have to use own logger instance and
+// unable to use global logger and log using functions like slog.InfoContext. Example:
 //
-// With CtxHandler we minimise it.
-// In main we should set CtxHandler as a default for a global logger:
+//	func main() {
+//		log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+//		slog.SetDefault(log)
+//		// ...
+//		srv := &http.Server{
+//			//...
+//		}
+//		srv.ListenAndServe()
+//		log.Info("done")
+//	}
 //
-//	slogx.SetDefaultCtxHandler(fallback, opts)
+//	func (handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+//		ctx := r.Context()
+//		log := slog.With("remote_addr", r.RemoteAddr)
+//		ctx = slogx.NewContextWithLogger(ctx, log)
+//		handleRequest(ctx)
+//	}
 //
-// By convention we do not change Default logger after.
-// Now we log anywhere in code with just one line:
+//	func handleRequest(ctx context.Context) {
+//		log := slogx.LoggerFromContext(ctx) // <-- THIS LINE IS EVERYWHERE!
+//		log.Info("message")                 // Will also log "remote_addr" attribute.
+//	}
 //
-//	slog.InfoContext(ctx, "some message",...))
+// With CtxHandler same functionality became:
 //
-// We recommend not to add attributes/groups on global logger.
-// All Attributes and Groups you should apply on handler, stored in ctx:
+//	func main() {
+//		handler := slog.NewJSONHandler(os.Stdout, nil)
+//		ctx := slogx.SetDefaultCtxHandler(context.Background(), handler)
+//		// ...
+//		srv := &http.Server{
+//			BaseContext: func(net.Listener) context.Context { return ctx },
+//			//...
+//		}
+//		srv.ListenAndServe()
+//		slog.InfoContext(ctx, "done")
+//	}
 //
-//	handler = handler.WithGroup("g")
-//	handler = handler.WithAttrs([]slog.Attr{slog.Int("key", 3)})
-//	ctx = slogx.NewContext(ctx, handler)
-//	slog.InfoContext(ctx, "message")
+//	func (handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+//		ctx := r.Context()
+//		ctx = slogx.ContextWithAttrs(ctx, "remote_addr", r.RemoteAddr)
+//		handleRequest(ctx)
+//	}
 //
-// Spawning a new logger using With or WithGrop will cause these settings
-// to be applied after the settings of handler stored in ctx.
-// By convention such logger must not be carried by stack neither in ctx nor in parameters.
+//	func handleRequest(ctx context.Context) {
+//		slog.InfoContext(ctx, "message")    // Will also log "remote_addr" attribute.
+//	}
 //
-// CtxHandler optionally reports !BADCTX with ctx as a value if there is no handler in it.
+// Code not aware about CtxHandler (e.g. libraries) will continue to work correctly, but there
+// are some extra restrictions:
+//   - You should not modify default logger after initial configuration.
+//   - If you'll create new logger instance (e.g. using slog.With(...)) then you should not
+//     modify Attrs or Group inside ctx while using that logger instance.
+//
+// Non-Context functions like slog.Info() will work, but they will ignore Attr/Group
+// configured inside ctx.
+//
+// By default CtxHandler will add attr with key "!BADCTX" and value ctx if ctx does not contain
+// slog handler, but this can be disabled using LaxCtxHandler option.
 type CtxHandler struct {
 	ignoreBADCTX bool
 	handler      slog.Handler

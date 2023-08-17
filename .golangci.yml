@@ -366,6 +366,10 @@ linters-settings:
     # Default: ["^(fmt\\.Print(|f|ln)|print|println)$"]
     forbid:
       - ^print(ln)?$
+      - {p: "^(.*)log\\.Error$", msg: "ErrorContext must be called"}
+      - {p: "^(.*)log\\.Warn$", msg: "WarnContext must be called"}
+      - {p: "^(.*)log\\.Info$", msg: "InfoContext must be called"}
+      - {p: "^(.*)log\\.Debug$", msg: "DebugContext must be called"}
       # Optionally put comments at the end of the regex, surrounded by `(# )?`
       # Escape any special characters.
       #- 'fmt\.Print.*(# Do not commit print statements\.)?'

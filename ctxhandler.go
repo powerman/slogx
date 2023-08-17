@@ -82,11 +82,11 @@ type CtxHandler struct {
 }
 
 // CtxHandlerOption is an option for a CtxHandler.
-type ctxHandlerOption func(*CtxHandler)
+type CtxHandlerOption func(*CtxHandler)
 
 // SetDefaultCtxHandler sets a CtxHandler as a default logger.
 // It applies given options. If opts is nil, the default options are used.
-func SetDefaultCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) {
+func SetDefaultCtxHandler(fallback slog.Handler, opts ...CtxHandlerOption) {
 	panic("TODO")
 }
 
@@ -114,6 +114,6 @@ func (h *CtxHandler) WithGroup(name string) slog.Handler {
 }
 
 // LaxCtxHandler is an option for disable adding !BADCTX attr.
-func LaxCtxHandler() ctxHandlerOption {
+func LaxCtxHandler() CtxHandlerOption {
 	panic("TODO")
 }

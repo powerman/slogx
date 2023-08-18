@@ -7,4 +7,21 @@
 [![Release](https://img.shields.io/github/v/release/powerman/slogx)](https://github.com/powerman/slogx/releases/latest)
 
 # Recommendations
- Disable non-Ctx slog functions (e.g. slog.Info) and methods using linter.
+
+Disable non-Context slog functions (e.g. slog.Info) and methods using linter.
+
+Example in golangci-lint config:
+
+```
+linters-settings:
+  ...
+  forbidigo:
+    ...
+    forbid:
+      - ^print(ln)?$
+      - {p: "^(.*)log\\.Error$", msg: "ErrorContext must be called"}
+      - {p: "^(.*)log\\.Warn$", msg: "WarnContext must be called"}
+      - {p: "^(.*)log\\.Info$", msg: "InfoContext must be called"}
+      - {p: "^(.*)log\\.Debug$", msg: "DebugContext must be called"}
+      ...
+```

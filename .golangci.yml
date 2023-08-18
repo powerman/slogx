@@ -376,6 +376,10 @@ linters-settings:
     forbid:
       # Builtin function:
       - ^print(ln)?$
+      - {p: "^(.*)log\\.Error$", msg: "ErrorContext must be called"}
+      - {p: "^(.*)log\\.Warn$", msg: "WarnContext must be called"}
+      - {p: "^(.*)log\\.Info$", msg: "InfoContext must be called"}
+      - {p: "^(.*)log\\.Debug$", msg: "DebugContext must be called"}
       # Optional message that gets included in error reports.
       #- p: ^fmt\.Print.*$
       #  msg: Do not commit print statements.

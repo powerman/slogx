@@ -84,12 +84,6 @@ type CtxHandler struct {
 // CtxHandlerOption is an option for a CtxHandler.
 type CtxHandlerOption func(*CtxHandler)
 
-// SetDefaultCtxHandler sets a CtxHandler as a default logger.
-// It applies given options. If opts is nil, the default options are used.
-func SetDefaultCtxHandler(fallback slog.Handler, opts ...CtxHandlerOption) {
-	panic("TODO")
-}
-
 // Enabled works as (slog.Handler).Enabled.
 // It uses handler returned by FromContext or fallback handler.
 func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
@@ -103,13 +97,30 @@ func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
 	panic("TODO")
 }
 
-// WithAttrs works exactly like (slog.Handler).WithAttrs.
+// WithAttrs works as (slog.Handler).WithAttrs.
 func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	panic("TODO")
 }
 
-// WithGroup works exactly like (slog.Handler).WithGroup.
+// WithGroup works as (slog.Handler).WithGroup.
 func (h *CtxHandler) WithGroup(name string) slog.Handler {
+	panic("TODO")
+}
+
+// SetDefaultCtxHandler sets a CtxHandler as a default logger
+// and returns context with set handler inside.
+// It applies given options. If opts is nil, the default options are used.
+func SetDefaultCtxHandler(fallback slog.Handler, opts ...CtxHandlerOption) context.Context {
+	panic("TODO")
+}
+
+// ContextWithAttrs applies attrs to a handler stored in ctx.
+func ContextWithAttrs(ctx context.Context, attrs ...any) context.Context {
+	panic("TODO")
+}
+
+// ContextWithGroup applies group to a handler stored in ctx.
+func ContextWithGroup(ctx context.Context, group string) context.Context {
 	panic("TODO")
 }
 

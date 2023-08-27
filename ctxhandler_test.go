@@ -32,9 +32,9 @@ func TestCtxHandler(tt *testing.T) {
 	var buf bytes.Buffer
 	var h slog.Handler
 	// With TextHandler
+	slogx.SetDefaultCtxHandler(slog.NewTextHandler(&buf, nil))
 	h = slog.NewTextHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
 	ctx := slogx.NewContext(context.Background(), h)
-	slogx.SetDefaultCtxHandler(slog.NewTextHandler(&buf, nil))
 	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2`)
 
@@ -53,10 +53,9 @@ func TestCtxHandler(tt *testing.T) {
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2 g.key4=value4`)
 
 	// With JsonHandler
-	buf.Reset()
+	slogx.SetDefaultCtxHandler(slog.NewJSONHandler(&buf, nil))
 	h = slog.NewJSONHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
 	ctx = slogx.NewContext(context.Background(), h)
-	slogx.SetDefaultCtxHandler(slog.NewJSONHandler(&buf, nil))
 	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2"}}`)
 
@@ -73,6 +72,26 @@ func TestCtxHandler(tt *testing.T) {
 	buf.Reset()
 	slog.InfoContext(ctx, "some message", "key4", "value4")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2","key4":"value4"}}`)
+}
+
+func TestContextWith(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+
+	var buf bytes.Buffer
+	slogx.SetDefaultCtxHandler(slog.NewTextHandler(&buf, nil))
+	ctx := slogx.NewContext(context.Background(), slog.NewTextHandler(&buf, nil))
+
+	ctx = slogx.ContextWithGroup(ctx, "g1")
+	ctx = slogx.ContextWithAttrs(ctx, "key1", "value1")
+	slog.InfoContext(ctx, "some message")
+	t.Match(buf.String(), `"some message" g1.key1=value1`)
+	buf.Reset()
+
+	ctx = slogx.ContextWithGroup(ctx, "g2")
+	ctx = slogx.ContextWithAttrs(ctx, "key2", 2)
+	slog.InfoContext(ctx, "some message")
+	t.Match(buf.String(), `"some message" g1.key1=value1 g1.g2.key2=2`)
 }
 
 func TestLaxCtxHandler(tt *testing.T) {

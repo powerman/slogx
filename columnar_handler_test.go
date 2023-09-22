@@ -99,6 +99,45 @@ func TestColumnarHandlerPackage(tt *testing.T) {
 	t.Match(buf.String(), `level=INFO msg=message package=""`)
 }
 
+func TestColumnarHandlerAttrsGroups(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+
+	ctx := context.Background()
+	var buf bytes.Buffer
+
+	r := slog.NewRecord(time.Now(), slog.LevelInfo, "message", 0)
+	ch := slogx.NewColumnarHandler(&buf, &slogx.ColumnarHandlerOption{
+		HandlerOptions: slog.HandlerOptions{
+			ReplaceAttr: func(groupe []string, a slog.Attr) slog.Attr {
+				if a.Key == slog.TimeKey {
+					return slog.Attr{}
+				}
+				return a
+			},
+		},
+	})
+
+	h := ch.WithAttrs(nil)
+	_ = h.Handle(ctx, r)
+	t.Equal(buf.String(), "level=INFO msg=message\n")
+
+	buf.Reset()
+	h = ch.WithAttrs([]slog.Attr{slog.String("key1", "value1")}).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key2", "value2")})
+	_ = h.Handle(ctx, r)
+	t.Equal(buf.String(), "level=INFO msg=message key1=value1 g.key2=value2\n")
+
+	buf.Reset()
+	h = h.(*slogx.ColumnarHandler).WithAttrs([]slog.Attr{})
+	_ = h.Handle(ctx, r)
+	t.Equal(buf.String(), "level=INFO msg=message key1=value1 g.key2=value2\n")
+
+	buf.Reset()
+	h = h.(*slogx.ColumnarHandler).WithGroup("")
+	_ = h.Handle(ctx, r)
+	t.Equal(buf.String(), "level=INFO msg=message key1=value1 g.key2=value2\n")
+}
+
 func TestColumnarHandlerPrefixSuffix(tt *testing.T) {
 	t := check.T(tt)
 	t.Parallel()
@@ -125,10 +164,8 @@ func TestColumnarHandlerPrefixSuffix(tt *testing.T) {
 		},
 	})
 	h := ch.WithAttrs([]slog.Attr{slog.String("key1", "value1")}).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key2", "value2")})
-	_ = h.Handle(ctx, r)
-	t.Equal(buf.String(), "level=INFO msg=message package=pkg key1=value1 g.key2=value2\n")
 
-	buf.Reset()
+	// Set/Append/Set AttrsPrefix
 	ch = h.(*slogx.ColumnarHandler).SetAttrsPrefix([]slog.Attr{slog.String("prefixKey1", "prefixValue1")})
 	ch = ch.AppendAttrsPrefix([]slog.Attr{slog.Int("prefixKey2", 2)})
 	ch = ch.AppendAttrsPrefix([]slog.Attr{slog.Int("prefixKey3", 3)})
@@ -140,6 +177,7 @@ func TestColumnarHandlerPrefixSuffix(tt *testing.T) {
 	t.Equal(buf.String(), "level=INFO msg=message package=pkg prefixKey3=3 key1=value1 g.key2=value2\n")
 	chPrefix := ch
 
+	// Set/Append/Set AttrsSuffix
 	buf.Reset()
 	ch = ch.SetAttrsSufix([]slog.Attr{slog.String("suffixKey1", "suffixValue1"), slog.String("suffixKey2", "suffixValue2")})
 	ch = ch.PrependAttrsSufix([]slog.Attr{slog.Int("suffixKey3", 3), slog.Int("suffixKey4", 4)})
@@ -151,6 +189,7 @@ func TestColumnarHandlerPrefixSuffix(tt *testing.T) {
 	_ = ch.Handle(ctx, r)
 	t.Equal(buf.String(), "level=INFO msg=message package=pkg prefixKey3=3 key1=value1 g.key2=value2 g.suffixKey6=suffixValue6\n")
 
+	// Parent ColumnarHandler was not changed.
 	buf.Reset()
 	_ = chPrefix.Handle(ctx, r)
 	t.Equal(buf.String(), "level=INFO msg=message package=pkg prefixKey3=3 key1=value1 g.key2=value2\n")

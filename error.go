@@ -18,7 +18,8 @@ func (e errorAttrs) Unwrap() error { return e.err }
 
 type errorAttrsOption func(*errorAttrs)
 
-// NewError returns errorAttrs error that contains given err and args.
+// NewError returns errorAttrs error that contains given err and args,
+// modified to []slog.Attr.
 func NewError(err error, args ...any) error {
 	if err == nil {
 		return nil
@@ -42,10 +43,29 @@ func NewErrorAttrs(err error, attrs ...slog.Attr) error {
 	return e
 }
 
+type errorNoAttrs struct { //nolint:errname // Custom naming.
+	err error
+}
+
+// Error returns string value of errorNoAttrs error.
+func (e errorNoAttrs) Error() string { return e.err.Error() }
+
+// Unwrap returns errorNoAttrs error.
+func (e errorNoAttrs) Unwrap() error { return e.err }
+
+// NewErrorNoAttrs returns errorNoAttrs error that contains only given err.
+// Such error signalize to stop recursive unwrapping and checking for attrs.
+func NewErrorNoAttrs(err error) error {
+	if err == nil {
+		return nil
+	}
+	return errorNoAttrs{err: err}
+}
+
 // ErrorAttrs returns an slog.ReplaceAttr function that collects all attrs from
 // wrapped errors, orders them as deeper errors come first, top level error come
-// last and appends slog.String(a.Key, a.Value.String()) to the end of accumulated
-// attrs.
+// last and appends a.Key and a.Value (as errorNoAttrs type) to the end of
+// accumulated attrs.
 //
 // Returned attr's Value is of slog.KindGroup. If groups is empty, Key will be empty,
 // otherwise it will be a.Key.
@@ -67,7 +87,7 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, a slog.Attr) slog.A
 			return a
 		}
 
-		attrs = append(attrs, slog.String(a.Key, a.Value.String()))
+		attrs = append(attrs, slog.Any(a.Key, errorNoAttrs{err: err}))
 
 		var key string
 		if len(groups) > 0 {
@@ -78,6 +98,9 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, a slog.Attr) slog.A
 }
 
 func getAllAttrs(attrs []slog.Attr, err error) []slog.Attr {
+	if _, ok := err.(errorNoAttrs); ok { //nolint:errorlint // Necessary type assertion.
+		return attrs
+	}
 	if errAttr, ok := err.(errorAttrs); ok { //nolint:errorlint // Necessary type assertion.
 		attrs = getAllAttrs(attrs, errAttr.Unwrap())
 		attrs = append(attrs, errAttr.attrs...)

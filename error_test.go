@@ -16,16 +16,30 @@ func TestErrorAttrs(tt *testing.T) {
 	t.Parallel()
 
 	var (
-		e              = "new error"
-		key            = "Key"
-		group          = []string{"group"}
-		err            = errors.New("new error") //nolint:goerr113 // False positive. ???
-		strAttr        = slog.String("key", "value")
-		anyAttr        = slog.Any("key", complex(2.2, 2.7))
-		errAttr        = slog.Any("key", err)
-		groupValue     = slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.String(key, "new error"))
-		newError       = slogx.NewError(err, "key1", "value1", "key2", "value2")
-		newErrorAttrs  = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
+		e             = "new error"
+		key           = "Key"
+		group         = []string{"group"}
+		err           = errors.New(e) //nolint:goerr113 // False positive. ???
+		newError      = slogx.NewError(err, "key1", "value1", "key2", "value2")
+		newErrorAttrs = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
+
+		newErrorAttr     = slogx.NewError(err, slog.Int("key", 3))
+		newErrorAttrAttr = slog.Any("", newErrorAttr)
+		groupValueAttr   = slog.GroupValue(slog.Int("key", 3), slog.String("", newErrorAttr.Error()))
+
+		newErrorInt         = slogx.NewError(err, 8)
+		newErrorIntAttr     = slog.Any("", newErrorInt)
+		groupValueBadKeyInt = slog.GroupValue(slog.Any(slogx.KeyBadKey, 8), slog.String("", newErrorInt.Error()))
+
+		newErrorBadKey     = slogx.NewError(err, "key1")
+		newErrorBadKeyAttr = slog.Any("", newErrorBadKey)
+		groupValueBadKey   = slog.GroupValue(slog.String(slogx.KeyBadKey, "key1"), slog.String("", newErrorBadKey.Error()))
+
+		strAttr    = slog.String("key", "value")
+		anyAttr    = slog.Any("key", complex(2.2, 2.7))
+		errAttr    = slog.Any("key", err)
+		groupValue = slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.String(key, "new error"))
+
 		wrapedError1   = fmt.Errorf("error1: %w", err)
 		wrapedError2   = fmt.Errorf("error2: %w", newError)
 		wrapedError3   = fmt.Errorf("error3: %w", newErrorAttrs)
@@ -39,6 +53,9 @@ func TestErrorAttrs(tt *testing.T) {
 	t.DeepEqual(slogx.NewErrorAttrs(nil), nil)
 
 	t.DeepEqual(slogx.NewError(err).Error(), e)
+	t.DeepEqual(errorAttrsFunc(nil, newErrorBadKeyAttr), slog.Attr{Key: "", Value: groupValueBadKey})
+	t.DeepEqual(errorAttrsFunc(nil, newErrorAttrAttr), slog.Attr{Key: "", Value: groupValueAttr})
+	t.DeepEqual(errorAttrsFunc(nil, newErrorIntAttr), slog.Attr{Key: "", Value: groupValueBadKeyInt})
 
 	t.DeepEqual(errorAttrsFunc(nil, strAttr), strAttr)
 	t.DeepEqual(errorAttrsFunc(nil, anyAttr), anyAttr)

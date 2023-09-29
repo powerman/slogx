@@ -5,10 +5,14 @@ import (
 	"log/slog"
 )
 
+const KeyBadKey = "!BADKEY"
+
 type errorAttrs struct { //nolint:errname // Custom naming.
 	err   error
 	attrs []slog.Attr
 }
+
+type config struct{}
 
 // Error returns string value of errorAttrs error.
 func (e errorAttrs) Error() string { return e.err.Error() }
@@ -16,9 +20,10 @@ func (e errorAttrs) Error() string { return e.err.Error() }
 // Unwrap returns errorAttrs error.
 func (e errorAttrs) Unwrap() error { return e.err }
 
-type errorAttrsOption func(*errorAttrs)
+type errorAttrsOption func(*config)
 
-// NewError returns errorAttrs error that contains given err and args.
+// NewError returns errorAttrs error that contains given err and args,
+// modified to []slog.Attr.
 func NewError(err error, args ...any) error {
 	if err == nil {
 		return nil
@@ -108,8 +113,6 @@ func argsToAttrSlice(args []any) []slog.Attr {
 // a key-value pair.
 // Otherwise, it treats args[0] as a value with a missing key.
 func argsToAttr(args []any) (slog.Attr, []any) { // Probably will be add with CtxHandler for common use.
-	const KeyBadKey = "!BADKEY" //nolint:gocritic,revive // Temporary. KeyBadKey will be add with CtxHandler.
-
 	switch x := args[0].(type) {
 	case string:
 		if len(args) == 1 {

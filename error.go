@@ -7,12 +7,17 @@ import (
 
 const KeyBadKey = "!BADKEY"
 
+var cfg = &config{} //nolint:gochecknoglobals // By design.
+
 type errorAttrs struct { //nolint:errname // Custom naming.
 	err   error
 	attrs []slog.Attr
 }
 
-type config struct{}
+type config struct {
+	groupTopErrorAttrs  bool
+	inlineSubErrorAttrs bool
+}
 
 // Error returns string value of errorAttrs error.
 func (e errorAttrs) Error() string { return e.err.Error() }
@@ -20,7 +25,7 @@ func (e errorAttrs) Error() string { return e.err.Error() }
 // Unwrap returns errorAttrs error.
 func (e errorAttrs) Unwrap() error { return e.err }
 
-type errorAttrsOption func(*config)
+type errorAttrsOption func()
 
 // NewError returns errorAttrs error that contains given err and args,
 // modified to []slog.Attr.
@@ -75,7 +80,7 @@ func NewErrorNoAttrs(err error) error {
 // otherwise it will be a.Key.
 //
 // If no errorAttrs args found it returns a as is.
-func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, a slog.Attr) slog.Attr {
+func ErrorAttrs(opts ...errorAttrsOption) func(groups []string, a slog.Attr) slog.Attr {
 	return func(groups []string, a slog.Attr) slog.Attr {
 		if !(a.Value.Kind() == slog.KindAny) {
 			return a
@@ -86,34 +91,63 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, a slog.Attr) slog.A
 		}
 
 		var attrs []slog.Attr
-		attrs = getAllAttrs(attrs, err)
+		attrs = getAttrs(attrs, err)
 		if len(attrs) == 0 {
 			return a
 		}
-
 		attrs = append(attrs, slog.Any(a.Key, errorNoAttrs{err: err}))
 
-		var key string
-		if len(groups) > 0 {
-			key = a.Key
+		cfg = &config{}
+		for _, opt := range opts {
+			opt()
 		}
-		return slog.Attr{Key: key, Value: slog.GroupValue(attrs...)}
+		return slog.Attr{Key: key(a.Key, len(groups) == 0), Value: slog.GroupValue(attrs...)}
 	}
 }
 
-func getAllAttrs(attrs []slog.Attr, err error) []slog.Attr {
+func GroupTopErrorAttrs() {
+	cfg.groupTopErrorAttrs = true
+}
+
+func InlineSubErrorAttrs() {
+	cfg.inlineSubErrorAttrs = true
+}
+
+func getAttrs(attrs []slog.Attr, err error) []slog.Attr {
 	if _, ok := err.(errorNoAttrs); ok { //nolint:errorlint // Necessary type assertion.
 		return attrs
 	}
 	if errAttr, ok := err.(errorAttrs); ok { //nolint:errorlint // Necessary type assertion.
-		attrs = getAllAttrs(attrs, errAttr.Unwrap())
+		attrs = getAttrs(attrs, errAttr.Unwrap())
 		attrs = append(attrs, errAttr.attrs...)
 	} else {
 		if e := errors.Unwrap(err); e != nil {
-			attrs = getAllAttrs(attrs, e)
+			attrs = getAttrs(attrs, e)
 		}
 	}
 	return attrs
+}
+
+func key(key string, zeroLenGroups bool) string { //nolint:revive // By design.
+	switch {
+	case zeroLenGroups && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
+		return key
+	case zeroLenGroups && cfg.groupTopErrorAttrs:
+		return key
+	case zeroLenGroups && cfg.inlineSubErrorAttrs:
+		return ""
+	case !zeroLenGroups && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
+		return ""
+	case !zeroLenGroups && cfg.groupTopErrorAttrs:
+		return key
+	case !zeroLenGroups && cfg.inlineSubErrorAttrs:
+		return ""
+	default:
+		if zeroLenGroups {
+			return ""
+		}
+	}
+	return key
 }
 
 func argsToAttrSlice(args []any) []slog.Attr {

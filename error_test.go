@@ -1,6 +1,7 @@
 package slogx_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,12 +17,13 @@ func TestErrorAttrs(tt *testing.T) {
 	t.Parallel()
 
 	var (
-		e             = "new error"
-		key           = "Key"
-		group         = []string{"group"}
-		err           = errors.New(e) //nolint:goerr113 // False positive. ???
-		newError      = slogx.NewError(err, "key1", "value1", "key2", "value2")
-		newErrorAttrs = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
+		e              = "new error"
+		key            = "Key"
+		group          = []string{"group"}
+		err            = errors.New(e) //nolint:goerr113 // False positive. ???
+		newError       = slogx.NewError(err, "key1", "value1", "key2", "value2")
+		newErrorAttrs  = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
+		errorAttrsFunc = slogx.ErrorAttrs()
 
 		newErrorBadKey       = slogx.NewError(err, "key1")
 		newErrorBadKeyAttr   = slog.Any("key", newErrorBadKey)
@@ -35,21 +37,22 @@ func TestErrorAttrs(tt *testing.T) {
 		newErrorIntAttr         = slog.Any("", newErrorInt)
 		attrGroupValueBadKeyInt = slog.Any("", slog.GroupValue(slog.Any(slogx.KeyBadKey, 8), slog.String("", newErrorInt.Error())))
 
-		strAttr           = slog.String("key", "value")
-		anyAttr           = slog.Any("key", complex(2.2, 2.7))
-		errAttr           = slog.Any("key", err)
+		strAttr = slog.String("key", "value")
+		anyAttr = slog.Any("key", complex(2.2, 2.7))
+		errAttr = slog.Any("key", err)
+
 		attrGroupValue    = slog.Any("", slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.String(key, "new error")))
 		attrGroupValueKey = slog.Any(key, slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.String(key, "new error")))
 
-		wrapedError1   = fmt.Errorf("error1: %w", err)
-		wrapedError2   = fmt.Errorf("error2: %w", newError)
-		wrapedError3   = fmt.Errorf("error3: %w", newErrorAttrs)
-		errNoAttr1     = slog.Any("key", slogx.NewErrorNoAttrs(wrapedError1))
-		errNoAttr2     = slog.Any("key", slogx.NewErrorNoAttrs(wrapedError3))
-		value1         = slog.AnyValue(wrapedError1)
-		groupValue2    = slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any(key, slogx.NewErrorNoAttrs(wrapedError2)))
-		groupValue3    = slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.Any(key, slogx.NewErrorNoAttrs(wrapedError3)))
-		errorAttrsFunc = slogx.ErrorAttrs()
+		wrapedError1 = fmt.Errorf("error1: %w", err)
+		wrapedError2 = fmt.Errorf("error2: %w", newError)
+		wrapedError3 = fmt.Errorf("error3: %w", newErrorAttrs)
+		value1       = slog.AnyValue(wrapedError1)
+		groupValue2  = slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any(key, slogx.NewErrorNoAttrs(wrapedError2)))
+		groupValue3  = slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.Any(key, slogx.NewErrorNoAttrs(wrapedError3)))
+
+		errNoAttr1 = slog.Any("key", slogx.NewErrorNoAttrs(wrapedError1))
+		errNoAttr2 = slog.Any("key", slogx.NewErrorNoAttrs(wrapedError3))
 	)
 
 	t.DeepEqual(slogx.NewError(nil), nil)
@@ -76,4 +79,51 @@ func TestErrorAttrs(tt *testing.T) {
 
 	t.DeepEqual(errorAttrsFunc(nil, errNoAttr1), errNoAttr1)
 	t.DeepEqual(errorAttrsFunc(nil, errNoAttr2), errNoAttr2)
+}
+
+func TestErrorAttrsOptions(tt *testing.T) {
+	t := check.T(tt)
+	// t.Parallel()
+
+	var (
+		buf bytes.Buffer
+
+		fGroupAttrs          = slogx.ErrorAttrs(slogx.GroupTopErrorAttrs)
+		fInlineAttrs         = slogx.ErrorAttrs(slogx.InlineSubErrorAttrs)
+		fGroupAndInlineAttrs = slogx.ErrorAttrs(slogx.GroupTopErrorAttrs, slogx.InlineSubErrorAttrs)
+
+		err            = errors.New("new error") //nolint:goerr113 // False positive. ???
+		newError       = slogx.NewError(err, "key1", "value1", "key2", "value2")
+		newErrorAttrs  = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
+		errorAttrsAttr = slog.Any("key", newErrorAttrs)
+		errAttr        = slog.Any("key", err)
+
+		resKey = slog.Any("key", slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key", slogx.NewErrorNoAttrs(err))))
+		res    = slog.Any("", slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key", slogx.NewErrorNoAttrs(err))))
+	)
+
+	t.DeepEqual((fGroupAndInlineAttrs([]string{"g"}, errAttr)), errAttr)
+
+	tests := []struct {
+		f      func(groups []string, a slog.Attr) slog.Attr
+		groups []string
+		want   slog.Attr
+	}{
+		{fGroupAttrs, []string{}, resKey},
+		{fGroupAttrs, []string{"g"}, resKey},
+		{fInlineAttrs, []string{}, res},
+		{fInlineAttrs, []string{"g"}, res},
+		{fGroupAndInlineAttrs, []string{}, resKey},
+		{fGroupAndInlineAttrs, []string{"g"}, res},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run("", func(tt *testing.T) {
+			t := check.T(tt).MustAll()
+
+			buf.Reset()
+			t.Equal((tc.f(tc.groups, errorAttrsAttr)).String(), tc.want.String())
+		})
+	}
 }

@@ -12,15 +12,13 @@ type errorAttrs struct { //nolint:errname // Custom naming.
 	attrs []slog.Attr
 }
 
-type config struct{}
-
 // Error returns string value of errorAttrs error.
 func (e errorAttrs) Error() string { return e.err.Error() }
 
 // Unwrap returns errorAttrs error.
 func (e errorAttrs) Unwrap() error { return e.err }
 
-type errorAttrsOption func(*config)
+type errorAttrsOption func()
 
 // NewError returns errorAttrs error that contains given err and args,
 // modified to []slog.Attr.
@@ -90,7 +88,6 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, a slog.Attr) slog.A
 		if len(attrs) == 0 {
 			return a
 		}
-
 		attrs = append(attrs, slog.Any(a.Key, errorNoAttrs{err: err}))
 
 		var key string

@@ -19,10 +19,12 @@ func TestEnabled(tt *testing.T) {
 	h := slog.NewTextHandler(os.Stdout, nil)
 	slogx.SetDefaultCtxHandler(h)
 	t.True(slog.Default().Enabled(context.Background(), slog.LevelWarn))
+	t.False(slog.Default().Enabled(context.Background(), slog.LevelDebug))
 
 	h = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})
 	ctx := slogx.NewContext(context.Background(), h)
 	t.True(slog.Default().Enabled(ctx, slog.LevelError))
+	t.False(slog.Default().Enabled(ctx, slog.LevelWarn))
 }
 
 func TestCtxHandler(tt *testing.T) {
@@ -82,16 +84,21 @@ func TestContextWith(tt *testing.T) {
 	slogx.SetDefaultCtxHandler(slog.NewTextHandler(&buf, nil))
 	ctx := slogx.NewContext(context.Background(), slog.NewTextHandler(&buf, nil))
 
-	ctx = slogx.ContextWithGroup(ctx, "g1")
 	ctx = slogx.ContextWithAttrs(ctx, "key1", "value1")
 	slog.InfoContext(ctx, "some message")
-	t.Match(buf.String(), `"some message" g1.key1=value1`)
-	buf.Reset()
+	t.Match(buf.String(), `"some message" key1=value1`)
 
-	ctx = slogx.ContextWithGroup(ctx, "g2")
-	ctx = slogx.ContextWithAttrs(ctx, "key2", 2)
+	buf.Reset()
+	ctx = slogx.ContextWithGroup(ctx, "g1")
+	ctx = slogx.ContextWithAttrs(ctx, "key2", "value2")
 	slog.InfoContext(ctx, "some message")
-	t.Match(buf.String(), `"some message" g1.key1=value1 g1.g2.key2=2`)
+	t.Match(buf.String(), `"some message" key1=value1 g1.key2=value2`)
+
+	buf.Reset()
+	ctx = slogx.ContextWithGroup(ctx, "g2")
+	ctx = slogx.ContextWithAttrs(ctx, "key3", 3)
+	slog.InfoContext(ctx, "some message")
+	t.Match(buf.String(), `"some message" key1=value1 g1.key2=value2 g1.g2.key3=3`)
 }
 
 func TestLaxCtxHandler(tt *testing.T) {
@@ -103,7 +110,7 @@ func TestLaxCtxHandler(tt *testing.T) {
 	h := slog.NewTextHandler(&buf, nil).WithAttrs([]slog.Attr{slog.String("key1", "value1")})
 	slogx.SetDefaultCtxHandler(h)
 	slog.InfoContext(ctx, "some message")
-	t.Match(buf.String(), `level=INFO msg="some message" key1=value1 !BADCTX`)
+	t.Match(buf.String(), `level=INFO msg="some message" key1=value1 !BADCTX=context.Background`)
 
 	buf.Reset()
 	slogx.SetDefaultCtxHandler(h, slogx.LaxCtxHandler())

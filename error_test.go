@@ -86,7 +86,6 @@ func TestErrorAttrs(tt *testing.T) {
 
 func TestErrorAttrsOptions(tt *testing.T) {
 	t := check.T(tt)
-	t.Parallel()
 
 	var (
 		buf bytes.Buffer

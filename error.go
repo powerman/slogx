@@ -101,7 +101,7 @@ func ErrorAttrs(opts ...errorAttrsOption) func(groups []string, a slog.Attr) slo
 		for _, opt := range opts {
 			opt()
 		}
-		return slog.Attr{Key: key(a.Key, len(groups) == 0), Value: slog.GroupValue(attrs...)}
+		return slog.Attr{Key: key(a.Key, groups), Value: slog.GroupValue(attrs...)}
 	}
 }
 
@@ -128,22 +128,22 @@ func getAttrs(attrs []slog.Attr, err error) []slog.Attr {
 	return attrs
 }
 
-func key(key string, zeroLenGroups bool) string { //nolint:revive // By design.
+func key(key string, groups []string) string {
 	switch {
-	case zeroLenGroups && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
+	case len(groups) == 0 && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
 		return key
-	case zeroLenGroups && cfg.groupTopErrorAttrs:
+	case len(groups) == 0 && cfg.groupTopErrorAttrs:
 		return key
-	case zeroLenGroups && cfg.inlineSubErrorAttrs:
+	case len(groups) == 0 && cfg.inlineSubErrorAttrs:
 		return ""
-	case !zeroLenGroups && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
+	case len(groups) > 0 && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
 		return ""
-	case !zeroLenGroups && cfg.groupTopErrorAttrs:
+	case len(groups) > 0 && cfg.groupTopErrorAttrs:
 		return key
-	case !zeroLenGroups && cfg.inlineSubErrorAttrs:
+	case len(groups) > 0 && cfg.inlineSubErrorAttrs:
 		return ""
 	default:
-		if zeroLenGroups {
+		if len(groups) == 0 {
 			return ""
 		}
 	}

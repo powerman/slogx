@@ -17,13 +17,15 @@ func TestErrorAttrs(tt *testing.T) {
 	t.Parallel()
 
 	var (
-		e              = "new error"
-		key            = "Key"
-		group          = []string{"group"}
-		err            = errors.New(e) //nolint:goerr113 // False positive. ???
-		newError       = slogx.NewError(err, "key1", "value1", "key2", "value2")
-		newErrorAttrs  = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
-		errorAttrsFunc = slogx.ErrorAttrs()
+		e               = "new error"
+		key             = "Key"
+		group           = []string{"group"}
+		err             = errors.New(e) //nolint:goerr113 // False positive. ???
+		newError        = slogx.NewError(err, "key1", "value1", "key2", "value2")
+		newErrorAttrs   = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
+		wrapedError     = fmt.Errorf("error: %w", err)
+		newErrorNoAttrs = slogx.NewErrorNoAttrs(wrapedError)
+		errorAttrsFunc  = slogx.ErrorAttrs()
 
 		newErrorBadKey       = slogx.NewError(err, "key1")
 		newErrorBadKeyAttr   = slog.Any("key", newErrorBadKey)
@@ -61,6 +63,7 @@ func TestErrorAttrs(tt *testing.T) {
 
 	t.DeepEqual(slogx.NewError(err).Error(), e)
 	t.DeepEqual(slogx.NewErrorNoAttrs(err).Error(), e)
+	t.DeepEqual(errors.Unwrap(newErrorNoAttrs), wrapedError)
 
 	t.Equal(errorAttrsFunc(nil, newErrorBadKeyAttr).String(), attrGroupValueBadKey.String())
 	t.DeepEqual(errorAttrsFunc(nil, newErrorAttrAttr).String(), attrGroupValueAttr.String())
@@ -83,7 +86,7 @@ func TestErrorAttrs(tt *testing.T) {
 
 func TestErrorAttrsOptions(tt *testing.T) {
 	t := check.T(tt)
-	// t.Parallel()
+	t.Parallel()
 
 	var (
 		buf bytes.Buffer

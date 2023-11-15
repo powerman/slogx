@@ -86,37 +86,38 @@ func TestErrorAttrs(tt *testing.T) {
 
 func TestErrorAttrsOptions(tt *testing.T) {
 	t := check.T(tt)
+	t.Parallel()
 
 	var (
 		buf bytes.Buffer
 
-		fGroupAttrs          = slogx.ErrorAttrs(slogx.GroupTopErrorAttrs)
-		fInlineAttrs         = slogx.ErrorAttrs(slogx.InlineSubErrorAttrs)
-		fGroupAndInlineAttrs = slogx.ErrorAttrs(slogx.GroupTopErrorAttrs, slogx.InlineSubErrorAttrs)
+		fGroupAttrs          = slogx.ErrorAttrs(slogx.GroupTopErrorAttrs())
+		fInlineAttrs         = slogx.ErrorAttrs(slogx.InlineSubErrorAttrs())
+		fGroupAndInlineAttrs = slogx.ErrorAttrs(slogx.GroupTopErrorAttrs(), slogx.InlineSubErrorAttrs())
 
 		err            = errors.New("new error") //nolint:goerr113 // False positive. ???
 		newError       = slogx.NewError(err, "key1", "value1", "key2", "value2")
 		newErrorAttrs  = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
 		errorAttrsAttr = slog.Any("key", newErrorAttrs)
-		errAttr        = slog.Any("key", err)
+		errWithoutAttr = slog.Any("key", err)
 
-		resKey = slog.Any("key", slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key", slogx.NewErrorNoAttrs(err))))
-		res    = slog.Any("", slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key", slogx.NewErrorNoAttrs(err))))
+		attrWithKey    = slog.Any("key", slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key", slogx.NewErrorNoAttrs(err))))
+		attrWithoutKey = slog.Any("", slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key", slogx.NewErrorNoAttrs(err))))
 	)
 
-	t.DeepEqual((fGroupAndInlineAttrs([]string{"g"}, errAttr)), errAttr)
+	t.DeepEqual((fGroupAndInlineAttrs([]string{"g"}, errWithoutAttr)), errWithoutAttr)
 
 	tests := []struct {
 		f      func(groups []string, a slog.Attr) slog.Attr
 		groups []string
 		want   slog.Attr
 	}{
-		{fGroupAttrs, []string{}, resKey},
-		{fGroupAttrs, []string{"g"}, resKey},
-		{fInlineAttrs, []string{}, res},
-		{fInlineAttrs, []string{"g"}, res},
-		{fGroupAndInlineAttrs, []string{}, resKey},
-		{fGroupAndInlineAttrs, []string{"g"}, res},
+		{fGroupAttrs, []string{}, attrWithKey},
+		{fGroupAttrs, []string{"g"}, attrWithKey},
+		{fInlineAttrs, []string{}, attrWithoutKey},
+		{fInlineAttrs, []string{"g"}, attrWithoutKey},
+		{fGroupAndInlineAttrs, []string{}, attrWithKey},
+		{fGroupAndInlineAttrs, []string{"g"}, attrWithoutKey},
 	}
 
 	for _, tc := range tests {

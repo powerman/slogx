@@ -18,7 +18,9 @@ func (e errorAttrs) Error() string { return e.err.Error() }
 // Unwrap returns errorAttrs error.
 func (e errorAttrs) Unwrap() error { return e.err }
 
-type errorAttrsOption func()
+type config struct{}
+
+type errorAttrsOption func(*config)
 
 // NewError returns errorAttrs error that contains given err and args,
 // modified to []slog.Attr.

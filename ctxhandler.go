@@ -45,7 +45,7 @@ import (
 //
 //	func main() {
 //		handler := slog.NewJSONHandler(os.Stdout, nil)
-//		ctx := slogx.SetDefaultCtxHandler(context.Background(), handler)
+//		ctx := slogx.SetDefaultCtxHandler(handler)
 //		// ...
 //		srv := &http.Server{
 //			BaseContext: func(net.Listener) context.Context { return ctx },

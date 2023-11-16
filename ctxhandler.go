@@ -50,7 +50,7 @@ const (
 //
 //	func main() {
 //		handler := slog.NewJSONHandler(os.Stdout, nil)
-//		ctx := slogx.SetDefaultCtxHandler(context.Background(), handler)
+//		ctx := slogx.SetDefaultCtxHandler(handler)
 //		// ...
 //		srv := &http.Server{
 //			BaseContext: func(net.Listener) context.Context { return ctx },
@@ -96,7 +96,7 @@ type data struct {
 }
 
 // CtxHandlerOption is an option for a CtxHandler.
-type CtxHandlerOption func(*CtxHandler)
+type ctxHandlerOption func(*CtxHandler)
 
 // Enabled works as (slog.Handler).Enabled.
 // It uses handler returned by FromContext or fallback handler.
@@ -156,7 +156,7 @@ func (h *CtxHandler) WithGroup(name string) slog.Handler {
 // SetDefaultCtxHandler sets a CtxHandler as a default logger
 // and returns context with set handler inside.
 // It applies given options. If opts is nil, the default options are used.
-func SetDefaultCtxHandler(fallback slog.Handler, opts ...CtxHandlerOption) context.Context {
+func SetDefaultCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) context.Context {
 	const size = 64 << 10
 	ctxHandler := &CtxHandler{
 		handler: fallback,
@@ -183,7 +183,7 @@ func ContextWithGroup(ctx context.Context, group string) context.Context {
 }
 
 // LaxCtxHandler is an option for disable adding !BADCTX attr.
-func LaxCtxHandler() CtxHandlerOption {
+func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
 	return func(ctxHandler *CtxHandler) {
 		ctxHandler.ignoreBADCTX = true
 	}

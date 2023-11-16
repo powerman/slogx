@@ -103,7 +103,6 @@ func TestContextWith(tt *testing.T) {
 
 func TestLaxCtxHandler(tt *testing.T) {
 	t := check.T(tt)
-	t.Parallel()
 
 	var buf bytes.Buffer
 	ctx := context.Background()

@@ -76,55 +76,52 @@ import (
 //
 // By default CtxHandler will add attr with key "!BADCTX" and value ctx if ctx does not contain
 // slog handler, but this can be disabled using LaxCtxHandler option.
-type CtxHandler struct {
-	ignoreBADCTX bool
-	handler      slog.Handler
-}
+type CtxHandler struct{}
 
 // CtxHandlerOption is an option for a CtxHandler.
-type CtxHandlerOption func(*CtxHandler)
+type ctxHandlerOption func(*CtxHandler)
 
 // Enabled works as (slog.Handler).Enabled.
 // It uses handler returned by FromContext or fallback handler.
-func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
+func (*CtxHandler) Enabled(context.Context, slog.Level) bool {
 	panic("TODO")
 }
 
 // Handle works as (slog.Handler).Handler.
 // It uses handler returned by FromContext or fallback handler.
 // Optionally add !BADCTX attr if FromContext returns nil.
-func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
+func (*CtxHandler) Handle(context.Context, slog.Record) error {
 	panic("TODO")
 }
 
 // WithAttrs works as (slog.Handler).WithAttrs.
-func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+func (*CtxHandler) WithAttrs([]slog.Attr) slog.Handler {
 	panic("TODO")
 }
 
 // WithGroup works as (slog.Handler).WithGroup.
-func (h *CtxHandler) WithGroup(name string) slog.Handler {
+func (*CtxHandler) WithGroup(string) slog.Handler {
 	panic("TODO")
 }
 
 // SetDefaultCtxHandler sets a CtxHandler as a default logger
 // and returns context with set handler inside.
 // It applies given options. If opts is nil, the default options are used.
-func SetDefaultCtxHandler(fallback slog.Handler, opts ...CtxHandlerOption) context.Context {
+func SetDefaultCtxHandler(slog.Handler, ...ctxHandlerOption) context.Context {
 	panic("TODO")
 }
 
 // ContextWithAttrs applies attrs to a handler stored in ctx.
-func ContextWithAttrs(ctx context.Context, attrs ...any) context.Context {
+func ContextWithAttrs(context.Context, ...any) context.Context {
 	panic("TODO")
 }
 
 // ContextWithGroup applies group to a handler stored in ctx.
-func ContextWithGroup(ctx context.Context, group string) context.Context {
+func ContextWithGroup(context.Context, string) context.Context {
 	panic("TODO")
 }
 
 // LaxCtxHandler is an option for disable adding !BADCTX attr.
-func LaxCtxHandler() CtxHandlerOption {
+func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
 	panic("TODO")
 }

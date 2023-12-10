@@ -1,8 +1,5 @@
 package slogx_test
 
-//go:generate -command MOCKGEN sh -c "$(git rev-parse --show-toplevel)/.buildcache/bin/$DOLLAR{DOLLAR}0 \"$DOLLAR{DOLLAR}@\"" mockgen
-//go:generate MOCKGEN -destination=mock.handler_test.go -package=$GOPACKAGE log/slog Handler
-
 import (
 	"bytes"
 	"context"
@@ -30,13 +27,13 @@ func TestLogSkip(tt *testing.T) {
 	t.Panic(func() { slogx.LogSkip(ctx, 0, nil, slog.LevelError, "message", "err", io.EOF) })
 
 	slogx.LogSkip(ctx, 0, h, slog.LevelError, "message", "err", io.EOF)
-	t.Match(buf.String(), "level=ERROR source=\\S*/slogx/skip_test.go:32 msg=message err=EOF")
+	t.Match(buf.String(), "level=ERROR source=\\S*/slogx/skip_test.go:29 msg=message err=EOF")
 
 	buf.Reset()
 	func() {
 		slogx.LogSkip(ctx, 1, h, slog.LevelError, "message", "err", io.EOF)
 	}()
-	t.Match(buf.String(), "level=ERROR source=\\S*/slogx/skip_test.go:38 msg=message err=EOF")
+	t.Match(buf.String(), "level=ERROR source=\\S*/slogx/skip_test.go:35 msg=message err=EOF")
 }
 
 func TestLogAttrsSkip(tt *testing.T) {
@@ -55,13 +52,13 @@ func TestLogAttrsSkip(tt *testing.T) {
 	})
 
 	slogx.LogAttrsSkip(ctx, 0, h, slog.LevelWarn, "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
-	t.Match(buf.String(), "level=WARN source=\\S*/slogx/skip_test.go:57 msg=message ID=18")
+	t.Match(buf.String(), "level=WARN source=\\S*/slogx/skip_test.go:54 msg=message ID=18")
 
 	buf.Reset()
 	func() {
 		slogx.LogAttrsSkip(ctx, 1, h, slog.LevelWarn, "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
 	}()
-	t.Match(buf.String(), "level=WARN source=\\S*/slogx/skip_test.go:63 msg=message ID=18")
+	t.Match(buf.String(), "level=WARN source=\\S*/slogx/skip_test.go:60 msg=message ID=18")
 }
 
 func TestLogSkipCtx(tt *testing.T) {
@@ -73,7 +70,7 @@ func TestLogSkipCtx(tt *testing.T) {
 	ctx := context.Background()
 	h.EXPECT().Enabled(ctx, slog.LevelError).Return(true)
 	h.EXPECT().Handle(ctx, gomock.Any()).Return(nil)
-	slogx.LogSkip(nil, 0, h, slog.LevelError, "message", "err", io.EOF) //nolint:staticcheck // False positive.
+	slogx.LogSkip(nil, 0, h, slog.LevelError, "message", "err", io.EOF) //nolint:staticcheck // By design.
 }
 
 func TestLogAttrsSkipCtx(tt *testing.T) {
@@ -85,5 +82,5 @@ func TestLogAttrsSkipCtx(tt *testing.T) {
 	ctx := context.Background()
 	h.EXPECT().Enabled(ctx, slog.LevelWarn).Return(true)
 	h.EXPECT().Handle(ctx, gomock.Any()).Return(nil)
-	slogx.LogAttrsSkip(nil, 1, h, slog.LevelWarn, "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)}) //nolint:staticcheck // False positive.
+	slogx.LogAttrsSkip(nil, 1, h, slog.LevelWarn, "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)}) //nolint:staticcheck // By design.
 }

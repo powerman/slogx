@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const offset = 2
-
 // LogSkip emits a log record using handler with the
 // current time and the given level and message.
 // Value skip=0 works exactly like (*slog.Logger).Log,
@@ -20,6 +18,7 @@ func LogSkip(ctx context.Context, skip int, handler slog.Handler, level slog.Lev
 	if !handler.Enabled(ctx, level) {
 		return
 	}
+	const offset = 2
 	var pcs [1]uintptr
 	runtime.Callers(offset+skip, pcs[:])
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
@@ -38,6 +37,7 @@ func LogAttrsSkip(ctx context.Context, skip int, handler slog.Handler, level slo
 	if !handler.Enabled(ctx, level) {
 		return
 	}
+	const offset = 2
 	var pcs [1]uintptr
 	runtime.Callers(offset+skip, pcs[:])
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])

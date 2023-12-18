@@ -2,19 +2,18 @@ package slogx
 
 import "log/slog"
 
-func ChainReplaceAttr(fn ...func([]string, slog.Attr) slog.Attr) func([]string, slog.Attr) slog.Attr {
-	if len(fn) == 0 {
+func ChainReplaceAttr(fs ...func([]string, slog.Attr) slog.Attr) func([]string, slog.Attr) slog.Attr {
+	if len(fs) == 0 {
 		panic("arguments required")
 	}
 
 	return func(g []string, a slog.Attr) slog.Attr {
-		attr := a
-		for _, f := range fn {
-			attr = f(g, attr)
-			if attr.Equal(slog.Attr{}) || attr.Value.Kind() == slog.KindGroup {
-				return attr
+		for _, f := range fs {
+			a = f(g, a)
+			if a.Equal(slog.Attr{}) || a.Value.Kind() == slog.KindGroup {
+				return a
 			}
 		}
-		return attr
+		return a
 	}
 }

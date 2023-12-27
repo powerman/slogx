@@ -50,7 +50,7 @@ const (
 //
 //	func main() {
 //		handler := slog.NewJSONHandler(os.Stdout, nil)
-//		ctx := slogx.SetDefaultCtxHandler(handler)
+//		ctx := slogx.SetDefaultCtxHandler(context.Background(), handler)
 //		// ...
 //		srv := &http.Server{
 //			BaseContext: func(net.Listener) context.Context { return ctx },
@@ -95,10 +95,9 @@ type data struct {
 	attrs []slog.Attr
 }
 
-// CtxHandlerOption is an option for a CtxHandler.
 type ctxHandlerOption func(*CtxHandler)
 
-// Enabled works as (slog.Handler).Enabled.
+// Enabled implements slog.Handler interface.
 // It uses handler returned by FromContext or fallback handler.
 func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
 	handler := FromContext(ctx)
@@ -110,7 +109,7 @@ func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
 
 // Handle works as (slog.Handler).Handler.
 // It uses handler returned by FromContext or fallback handler.
-// Optionally add !BADCTX attr if FromContext returns nil.
+// Adds !BADCTX attr if FromContext returns nil. Use LaxCtxHandler to disable this behaviour.
 func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
 	handler := FromContext(ctx)
 	if handler == nil {
@@ -129,7 +128,7 @@ func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
 	return handler.Handle(ctx, r)
 }
 
-// WithAttrs works as (slog.Handler).WithAttrs.
+// WithAttrs implements slog.Handler interface.
 func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	if len(attrs) == 0 {
 		return h
@@ -141,7 +140,7 @@ func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return ctxHandler
 }
 
-// WithGroup works as (slog.Handler).WithGroup.
+// WithGroup implements slog.Handler interface.
 func (h *CtxHandler) WithGroup(name string) slog.Handler {
 	if name == "" {
 		return h
@@ -153,9 +152,8 @@ func (h *CtxHandler) WithGroup(name string) slog.Handler {
 	return ctxHandler
 }
 
-// SetDefaultCtxHandler sets a CtxHandler as a default logger
-// and returns context with set handler inside.
-// It applies given options. If opts is nil, the default options are used.
+// SetDefaultCtxHandler sets a CtxHandler as a default logger's handler
+// and returns context with this handler inside.
 func SetDefaultCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) context.Context {
 	const size = 64 << 10
 	ctxHandler := &CtxHandler{

@@ -86,7 +86,7 @@ func (*CtxHandler) Enabled(context.Context, slog.Level) bool {
 	panic("TODO")
 }
 
-// Handle works as (slog.Handler).Handler.
+// Handle implements slog.Handler interface.
 // It uses handler returned by FromContext or fallback handler.
 // Adds !BADCTX attr if FromContext returns nil. Use LaxCtxHandler to disable this behaviour.
 func (*CtxHandler) Handle(context.Context, slog.Record) error {

@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	KeyBadKey = "!BADKEY"
-	KeyBadCtx = "!BADCTX"
+	badKey = "!BADKEY"
+	badCtx = "!BADCTX"
 )
 
 // CtxHandler provides a way to use slog.Handler stored in a context instead of slog.Logger.
@@ -82,27 +82,35 @@ const (
 // By default CtxHandler will add attr with key "!BADCTX" and value ctx if ctx does not contain
 // slog handler, but this can be disabled using LaxCtxHandler option.
 type CtxHandler struct {
-	handler      slog.Handler
-	opList       []data
-	ignoreBADCTX bool
+	fallback   slog.Handler
+	ops        []handlerOp
+	omitBadCtx bool
 }
 
-// Data is used for store operations with logger.
-// It may be group to add or attributes. It also keeps an order.
-// Applying Handle method all data will be added to a handler at last.
-type data struct {
+type handlerOp struct {
 	group string
 	attrs []slog.Attr
 }
 
 type ctxHandlerOption func(*CtxHandler)
 
+func newCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) *CtxHandler {
+	const size = 64 << 10 // TODO
+	ctxHandler := &CtxHandler{
+		fallback: fallback,
+	}
+	for _, opt := range opts {
+		opt(ctxHandler)
+	}
+	return ctxHandler
+}
+
 // Enabled implements slog.Handler interface.
 // It uses handler returned by FromContext or fallback handler.
 func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
 	handler := FromContext(ctx)
 	if handler == nil {
-		handler = h.handler
+		handler = h.fallback
 	}
 	return handler.Enabled(ctx, l)
 }
@@ -113,12 +121,12 @@ func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
 func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
 	handler := FromContext(ctx)
 	if handler == nil {
-		handler = h.handler
-		if !h.ignoreBADCTX {
-			handler = handler.WithAttrs([]slog.Attr{slog.Any(KeyBadCtx, ctx)})
+		handler = h.fallback
+		if !h.omitBadCtx {
+			handler = handler.WithAttrs([]slog.Attr{slog.Any(badCtx, ctx)})
 		}
 	}
-	for _, op := range h.opList {
+	for _, op := range h.ops {
 		if len(op.group) > 0 {
 			handler = handler.WithGroup(op.group)
 		} else {
@@ -134,7 +142,7 @@ func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		return h
 	}
 	ctxHandler := h.clone()
-	ctxHandler.opList = append(ctxHandler.opList, data{
+	ctxHandler.ops = append(ctxHandler.ops, handlerOp{
 		attrs: attrs,
 	})
 	return ctxHandler
@@ -146,26 +154,17 @@ func (h *CtxHandler) WithGroup(name string) slog.Handler {
 		return h
 	}
 	ctxHandler := h.clone()
-	ctxHandler.opList = append(ctxHandler.opList, data{
+	ctxHandler.ops = append(ctxHandler.ops, handlerOp{
 		group: name,
 	})
 	return ctxHandler
 }
 
 // SetDefaultCtxHandler sets a CtxHandler as a default logger's handler
-// and returns context with this handler inside.
-func SetDefaultCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) context.Context {
-	const size = 64 << 10
-	ctxHandler := &CtxHandler{
-		handler: fallback,
-		opList:  make([]data, size),
-	}
-	for _, opt := range opts {
-		opt(ctxHandler)
-	}
-	slog.SetDefault(slog.New(ctxHandler))
-
-	return NewContext(context.Background(), fallback)
+// and returns context with this handler inside. TODO (this)
+func SetDefaultCtxHandler(ctx context.Context, fallback slog.Handler, opts ...ctxHandlerOption) context.Context {
+	slog.SetDefault(slog.New(newCtxHandler(fallback, opts...)))
+	return NewContext(ctx, fallback)
 }
 
 // ContextWithAttrs applies attrs to a handler stored in ctx.
@@ -183,15 +182,15 @@ func ContextWithGroup(ctx context.Context, group string) context.Context {
 // LaxCtxHandler is an option for disable adding !BADCTX attr.
 func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
 	return func(ctxHandler *CtxHandler) {
-		ctxHandler.ignoreBADCTX = true
+		ctxHandler.omitBadCtx = true
 	}
 }
 
 func (h *CtxHandler) clone() *CtxHandler {
 	return &CtxHandler{
-		handler:      h.handler,
-		opList:       h.opList,
-		ignoreBADCTX: h.ignoreBADCTX,
+		fallback:   h.fallback,
+		ops:        h.ops,
+		omitBadCtx: h.omitBadCtx,
 	}
 }
 
@@ -217,7 +216,7 @@ func argsToAttr(args []any) (slog.Attr, []any) {
 	switch x := args[0].(type) {
 	case string:
 		if len(args) == 1 {
-			return slog.String(KeyBadKey, x), nil
+			return slog.String(badKey, x), nil
 		}
 		return slog.Any(x, args[1]), args[2:]
 
@@ -225,6 +224,6 @@ func argsToAttr(args []any) (slog.Attr, []any) {
 		return x, args[1:]
 
 	default:
-		return slog.Any(KeyBadKey, x), args[1:]
+		return slog.Any(badKey, x), args[1:]
 	}
 }

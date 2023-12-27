@@ -45,7 +45,7 @@ import (
 //
 //	func main() {
 //		handler := slog.NewJSONHandler(os.Stdout, nil)
-//		ctx := slogx.SetDefaultCtxHandler(handler)
+//		ctx := slogx.SetDefaultCtxHandler(context.Background(), handler)
 //		// ...
 //		srv := &http.Server{
 //			BaseContext: func(net.Listener) context.Context { return ctx },
@@ -78,10 +78,9 @@ import (
 // slog handler, but this can be disabled using LaxCtxHandler option.
 type CtxHandler struct{}
 
-// CtxHandlerOption is an option for a CtxHandler.
 type ctxHandlerOption func(*CtxHandler)
 
-// Enabled works as (slog.Handler).Enabled.
+// Enabled implements slog.Handler interface.
 // It uses handler returned by FromContext or fallback handler.
 func (*CtxHandler) Enabled(context.Context, slog.Level) bool {
 	panic("TODO")
@@ -89,25 +88,24 @@ func (*CtxHandler) Enabled(context.Context, slog.Level) bool {
 
 // Handle works as (slog.Handler).Handler.
 // It uses handler returned by FromContext or fallback handler.
-// Optionally add !BADCTX attr if FromContext returns nil.
+// Adds !BADCTX attr if FromContext returns nil. Use LaxCtxHandler to disable this behaviour.
 func (*CtxHandler) Handle(context.Context, slog.Record) error {
 	panic("TODO")
 }
 
-// WithAttrs works as (slog.Handler).WithAttrs.
+// WithAttrs implements slog.Handler interface.
 func (*CtxHandler) WithAttrs([]slog.Attr) slog.Handler {
 	panic("TODO")
 }
 
-// WithGroup works as (slog.Handler).WithGroup.
+// WithGroup implements slog.Handler interface.
 func (*CtxHandler) WithGroup(string) slog.Handler {
 	panic("TODO")
 }
 
-// SetDefaultCtxHandler sets a CtxHandler as a default logger
-// and returns context with set handler inside.
-// It applies given options. If opts is nil, the default options are used.
-func SetDefaultCtxHandler(slog.Handler, ...ctxHandlerOption) context.Context {
+// SetDefaultCtxHandler sets a CtxHandler as a default logger's handler
+// and returns context with this handler inside.
+func SetDefaultCtxHandler(context.Context, slog.Handler, ...ctxHandlerOption) context.Context {
 	panic("TODO")
 }
 

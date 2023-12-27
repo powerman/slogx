@@ -8,6 +8,8 @@
 
 # Recommendations
 
+## Using CtxHandler with linter
+
 Disable non-Context slog functions (e.g. slog.Info) and methods using linter.
 
 Example in golangci-lint config:
@@ -18,10 +20,14 @@ linters-settings:
   forbidigo:
     ...
     forbid:
-      - ^print(ln)?$
-      - {p: "^(.*)log\\.Error$", msg: "ErrorContext must be called"}
-      - {p: "^(.*)log\\.Warn$", msg: "WarnContext must be called"}
-      - {p: "^(.*)log\\.Info$", msg: "InfoContext must be called"}
-      - {p: "^(.*)log\\.Debug$", msg: "DebugContext must be called"}
-      ...
+      # slogx.CtxHandler support:
+      - p: ^slog\.(Logger\.)?Error$
+        msg: Use ErrorContext to support slogx.CtxHandler
+      - p: ^slog\.(Logger\.)?Warn$
+        msg: Use WarnContext to support slogx.CtxHandler
+      - p: ^slog\.(Logger\.)?Info$
+        msg: Use InfoContext to support slogx.CtxHandler
+      - p: ^slog\.(Logger\.)?Debug$
+        msg: Use DebugContext to support slogx.CtxHandler
+    analyze-types: true
 ```

@@ -95,7 +95,6 @@ type handlerOp struct {
 type ctxHandlerOption func(*CtxHandler)
 
 func newCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) *CtxHandler {
-	const size = 64 << 10 // TODO
 	ctxHandler := &CtxHandler{
 		fallback: fallback,
 	}
@@ -141,10 +140,7 @@ func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	if len(attrs) == 0 {
 		return h
 	}
-	ctxHandler := h.clone()
-	ctxHandler.ops = append(ctxHandler.ops, handlerOp{
-		attrs: attrs,
-	})
+	ctxHandler := h.addOp(handlerOp{attrs: attrs})
 	return ctxHandler
 }
 
@@ -153,15 +149,12 @@ func (h *CtxHandler) WithGroup(name string) slog.Handler {
 	if name == "" {
 		return h
 	}
-	ctxHandler := h.clone()
-	ctxHandler.ops = append(ctxHandler.ops, handlerOp{
-		group: name,
-	})
+	ctxHandler := h.addOp(handlerOp{group: name})
 	return ctxHandler
 }
 
 // SetDefaultCtxHandler sets a CtxHandler as a default logger's handler
-// and returns context with this handler inside. TODO (this)
+// and returns context with this handler inside.
 func SetDefaultCtxHandler(ctx context.Context, fallback slog.Handler, opts ...ctxHandlerOption) context.Context {
 	slog.SetDefault(slog.New(newCtxHandler(fallback, opts...)))
 	return NewContext(ctx, fallback)
@@ -186,44 +179,10 @@ func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
 	}
 }
 
-func (h *CtxHandler) clone() *CtxHandler {
+func (h *CtxHandler) addOp(op handlerOp) *CtxHandler {
 	return &CtxHandler{
 		fallback:   h.fallback,
-		ops:        h.ops,
+		ops:        append(h.ops[:len(h.ops):len(h.ops)], op),
 		omitBadCtx: h.omitBadCtx,
-	}
-}
-
-func argsToAttrSlice(args []any) []slog.Attr {
-	var (
-		attr  slog.Attr
-		attrs []slog.Attr
-	)
-	for len(args) > 0 {
-		attr, args = argsToAttr(args)
-		attrs = append(attrs, attr)
-	}
-	return attrs
-}
-
-// argsToAttr turns a prefix of the nonempty args slice into an Attr
-// and returns the unconsumed portion of the slice.
-// If args[0] is an Attr, it returns it.
-// If args[0] is a string, it treats the first two elements as
-// a key-value pair.
-// Otherwise, it treats args[0] as a value with a missing key.
-func argsToAttr(args []any) (slog.Attr, []any) {
-	switch x := args[0].(type) {
-	case string:
-		if len(args) == 1 {
-			return slog.String(badKey, x), nil
-		}
-		return slog.Any(x, args[1]), args[2:]
-
-	case slog.Attr:
-		return x, args[1:]
-
-	default:
-		return slog.Any(badKey, x), args[1:]
 	}
 }

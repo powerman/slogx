@@ -115,7 +115,7 @@ func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
 	return handler.Enabled(ctx, l)
 }
 
-// Handle works as (slog.Handler).Handler.
+// Handle implements slog.Handler interface.
 // It uses handler returned by FromContext or fallback handler.
 // Adds !BADCTX attr if FromContext returns nil. Use LaxCtxHandler to disable this behaviour.
 func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {

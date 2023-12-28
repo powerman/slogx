@@ -1,7 +1,7 @@
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-// From version 1.24.
+// From version 1.21.4.
 
 package slogx
 

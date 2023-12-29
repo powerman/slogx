@@ -105,9 +105,9 @@ func newCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) *CtxHandler 
 }
 
 // Enabled implements slog.Handler interface.
-// It uses handler returned by FromContext or fallback handler.
+// It uses handler returned by HandlerFromContext or fallback handler.
 func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
-	handler := FromContext(ctx)
+	handler := HandlerFromContext(ctx)
 	if handler == nil {
 		handler = h.fallback
 	}
@@ -115,10 +115,10 @@ func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
 }
 
 // Handle implements slog.Handler interface.
-// It uses handler returned by FromContext or fallback handler.
-// Adds !BADCTX attr if FromContext returns nil. Use LaxCtxHandler to disable this behaviour.
+// It uses handler returned by HandlerFromContext or fallback handler.
+// Adds !BADCTX attr if HandlerFromContext returns nil. Use LaxCtxHandler to disable this behaviour.
 func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
-	handler := FromContext(ctx)
+	handler := HandlerFromContext(ctx)
 	if handler == nil {
 		handler = h.fallback
 		if !h.omitBadCtx {
@@ -157,19 +157,19 @@ func (h *CtxHandler) WithGroup(name string) slog.Handler {
 // and returns context with this handler inside.
 func SetDefaultCtxHandler(ctx context.Context, fallback slog.Handler, opts ...ctxHandlerOption) context.Context {
 	slog.SetDefault(slog.New(newCtxHandler(fallback, opts...)))
-	return NewContext(ctx, fallback)
+	return NewContextWithHandler(ctx, fallback)
 }
 
 // ContextWithAttrs applies attrs to a handler stored in ctx.
 func ContextWithAttrs(ctx context.Context, attrs ...any) context.Context {
-	handler := FromContext(ctx)
-	return NewContext(ctx, handler.WithAttrs(argsToAttrSlice(attrs)))
+	handler := HandlerFromContext(ctx)
+	return NewContextWithHandler(ctx, handler.WithAttrs(argsToAttrSlice(attrs)))
 }
 
 // ContextWithGroup applies group to a handler stored in ctx.
 func ContextWithGroup(ctx context.Context, group string) context.Context {
-	handler := FromContext(ctx)
-	return NewContext(ctx, handler.WithGroup(group))
+	handler := HandlerFromContext(ctx)
+	return NewContextWithHandler(ctx, handler.WithGroup(group))
 }
 
 // LaxCtxHandler is an option for disable adding !BADCTX attr.

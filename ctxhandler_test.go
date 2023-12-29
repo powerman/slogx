@@ -22,7 +22,7 @@ func TestEnabled(tt *testing.T) {
 	t.False(slog.Default().Enabled(context.Background(), slog.LevelDebug))
 
 	h = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})
-	ctx := slogx.NewContext(context.Background(), h)
+	ctx := slogx.NewContextWithHandler(context.Background(), h)
 	t.True(slog.Default().Enabled(ctx, slog.LevelError))
 	t.False(slog.Default().Enabled(ctx, slog.LevelWarn))
 }
@@ -36,7 +36,7 @@ func TestCtxHandler(tt *testing.T) {
 	// With TextHandler
 	slogx.SetDefaultCtxHandler(context.Background(), slog.NewTextHandler(&buf, nil))
 	h = slog.NewTextHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
-	ctx := slogx.NewContext(context.Background(), h)
+	ctx := slogx.NewContextWithHandler(context.Background(), h)
 	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `level=INFO msg="some message" g.key1=value1 g.key2=value2`)
 
@@ -57,7 +57,7 @@ func TestCtxHandler(tt *testing.T) {
 	// With JsonHandler
 	slogx.SetDefaultCtxHandler(context.Background(), slog.NewJSONHandler(&buf, nil))
 	h = slog.NewJSONHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
-	ctx = slogx.NewContext(context.Background(), h)
+	ctx = slogx.NewContextWithHandler(context.Background(), h)
 	slog.InfoContext(ctx, "some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2"}}`)
 

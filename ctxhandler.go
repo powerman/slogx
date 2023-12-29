@@ -5,6 +5,11 @@ import (
 	"log/slog"
 )
 
+const (
+	badKey = "!BADKEY"
+	badCtx = "!BADCTX"
+)
+
 // CtxHandler provides a way to use slog.Handler stored in a context instead of slog.Logger.
 // This makes possible to store extra slog.Attr inside a context and make it magically work
 // without needs to get slog.Logger out of context each time you need to log something.
@@ -76,50 +81,105 @@ import (
 //
 // By default CtxHandler will add attr with key "!BADCTX" and value ctx if ctx does not contain
 // slog handler, but this can be disabled using LaxCtxHandler option.
-type CtxHandler struct{}
+type CtxHandler struct {
+	fallback   slog.Handler
+	ops        []handlerOp
+	omitBadCtx bool
+}
+
+type handlerOp struct {
+	group string
+	attrs []slog.Attr
+}
 
 type ctxHandlerOption func(*CtxHandler)
 
+func newCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) *CtxHandler {
+	ctxHandler := &CtxHandler{
+		fallback: fallback,
+	}
+	for _, opt := range opts {
+		opt(ctxHandler)
+	}
+	return ctxHandler
+}
+
 // Enabled implements slog.Handler interface.
-// It uses handler returned by FromContext or fallback handler.
-func (*CtxHandler) Enabled(context.Context, slog.Level) bool {
-	panic("TODO")
+// It uses handler returned by HandlerFromContext or fallback handler.
+func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
+	handler := HandlerFromContext(ctx)
+	if handler == nil {
+		handler = h.fallback
+	}
+	return handler.Enabled(ctx, l)
 }
 
 // Handle implements slog.Handler interface.
-// It uses handler returned by FromContext or fallback handler.
-// Adds !BADCTX attr if FromContext returns nil. Use LaxCtxHandler to disable this behaviour.
-func (*CtxHandler) Handle(context.Context, slog.Record) error {
-	panic("TODO")
+// It uses handler returned by HandlerFromContext or fallback handler.
+// Adds !BADCTX attr if HandlerFromContext returns nil. Use LaxCtxHandler to disable this behaviour.
+func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
+	handler := HandlerFromContext(ctx)
+	if handler == nil {
+		handler = h.fallback
+		if !h.omitBadCtx {
+			handler = handler.WithAttrs([]slog.Attr{slog.Any(badCtx, ctx)})
+		}
+	}
+	for _, op := range h.ops {
+		if len(op.group) > 0 {
+			handler = handler.WithGroup(op.group)
+		} else {
+			handler = handler.WithAttrs(op.attrs)
+		}
+	}
+	return handler.Handle(ctx, r)
 }
 
 // WithAttrs implements slog.Handler interface.
-func (*CtxHandler) WithAttrs([]slog.Attr) slog.Handler {
-	panic("TODO")
+func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	if len(attrs) == 0 {
+		return h
+	}
+	ctxHandler := h.withOp(handlerOp{attrs: attrs})
+	return ctxHandler
 }
 
 // WithGroup implements slog.Handler interface.
-func (*CtxHandler) WithGroup(string) slog.Handler {
-	panic("TODO")
+func (h *CtxHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return h
+	}
+	ctxHandler := h.withOp(handlerOp{group: name})
+	return ctxHandler
 }
 
 // SetDefaultCtxHandler sets a CtxHandler as a default logger's handler
 // and returns context with this handler inside.
-func SetDefaultCtxHandler(context.Context, slog.Handler, ...ctxHandlerOption) context.Context {
-	panic("TODO")
+func SetDefaultCtxHandler(ctx context.Context, fallback slog.Handler, opts ...ctxHandlerOption) context.Context {
+	slog.SetDefault(slog.New(newCtxHandler(fallback, opts...)))
+	return NewContextWithHandler(ctx, fallback)
 }
 
 // ContextWithAttrs applies attrs to a handler stored in ctx.
-func ContextWithAttrs(context.Context, ...any) context.Context {
-	panic("TODO")
+func ContextWithAttrs(ctx context.Context, attrs ...any) context.Context {
+	handler := HandlerFromContext(ctx)
+	return NewContextWithHandler(ctx, handler.WithAttrs(argsToAttrSlice(attrs)))
 }
 
 // ContextWithGroup applies group to a handler stored in ctx.
-func ContextWithGroup(context.Context, string) context.Context {
-	panic("TODO")
+func ContextWithGroup(ctx context.Context, group string) context.Context {
+	handler := HandlerFromContext(ctx)
+	return NewContextWithHandler(ctx, handler.WithGroup(group))
 }
 
 // LaxCtxHandler is an option for disable adding !BADCTX attr.
 func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
-	panic("TODO")
+	return func(ctxHandler *CtxHandler) {
+		ctxHandler.omitBadCtx = true
+	}
+}
+
+func (h CtxHandler) withOp(op handlerOp) *CtxHandler {
+	h.ops = append(h.ops[:len(h.ops):len(h.ops)], op)
+	return &h
 }

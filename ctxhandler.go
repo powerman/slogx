@@ -140,7 +140,7 @@ func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	if len(attrs) == 0 {
 		return h
 	}
-	ctxHandler := h.addOp(handlerOp{attrs: attrs})
+	ctxHandler := h.withOp(handlerOp{attrs: attrs})
 	return ctxHandler
 }
 
@@ -149,7 +149,7 @@ func (h *CtxHandler) WithGroup(name string) slog.Handler {
 	if name == "" {
 		return h
 	}
-	ctxHandler := h.addOp(handlerOp{group: name})
+	ctxHandler := h.withOp(handlerOp{group: name})
 	return ctxHandler
 }
 
@@ -179,10 +179,7 @@ func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
 	}
 }
 
-func (h *CtxHandler) addOp(op handlerOp) *CtxHandler {
-	return &CtxHandler{
-		fallback:   h.fallback,
-		ops:        append(h.ops[:len(h.ops):len(h.ops)], op),
-		omitBadCtx: h.omitBadCtx,
-	}
+func (h CtxHandler) withOp(op handlerOp) *CtxHandler {
+	h.ops = append(h.ops[:len(h.ops):len(h.ops)], op)
+	return &h
 }

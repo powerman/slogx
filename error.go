@@ -18,7 +18,7 @@ func (e errorAttrs) Error() string { return e.err.Error() }
 // Unwrap returns wrapped error.
 func (e errorAttrs) Unwrap() error { return e.err }
 
-type config struct{}
+type errorAttrsConfig struct{}
 
 type errorAttrsOption func(*config)
 

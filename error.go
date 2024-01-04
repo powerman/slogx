@@ -18,44 +18,33 @@ func (e errorAttrs) Unwrap() error { return e.err }
 
 type errorAttrsConfig struct{}
 
-type errorAttrsOption func(*config)
+type errorAttrsOption func(*errorAttrsConfig)
 
 // NewError returns err with attached slog Attrs specified by args.
 func NewError(err error, args ...any) error {
-	if err == nil {
-		return nil
-	}
-	e := errorAttrs{err: err}
-	if len(args) > 0 {
-		e.attrs = argsToAttrSlice(args)
-	}
-	return e
+	return NewErrorAttrs(err, argsToAttrSlice(args)...)
 }
 
-// NewErrorAttrs returns errorAttrs error that contains given err and attrs.
+// NewErrorAttrs returns err with attached slog attrs.
 func NewErrorAttrs(err error, attrs ...slog.Attr) error {
 	if err == nil {
 		return nil
 	}
-	e := errorAttrs{err: err}
-	if len(attrs) > 0 {
-		e.attrs = attrs
-	}
-	return e
+	return errorAttrs{err: err, attrs: attrs}
 }
 
-// ErrorAttrs returns an slog.ReplaceAttr function that collects all attrs from
-// wrapped errors, orders them as deeper errors come first, top level error come
-// last and appends slog.String(a.Key, a.Value.String()) to the end of accumulated
-// attrs.
+// ErrorAttrs returns an slog.ReplaceAttr function that will replace attr's Value of error type
+// with slog.GroupValue containing all attrs attached to any of recursively unwrapped errors
+// plus original attr's Value.
 //
-// Returned attr's Value is of slog.KindGroup. If groups is empty, Key will be empty,
-// otherwise it will be a.Key.
+// By default returned attr's Key depends on groups:
+// if groups are empty then Key will be empty, otherwise Key will be attr's Key.
+// This behaviour may be changed by given options.
 //
-// If no errorAttrs args found it returns a as is.
-func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, a slog.Attr) slog.Attr {
+// If attr's Value is not of error type or error has no attached attrs then returns original attr.
+func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slog.Attr {
 	return func(groups []string, a slog.Attr) slog.Attr {
-		if !(a.Value.Kind() == slog.KindAny) {
+		if a.Value.Kind() != slog.KindAny {
 			return a
 		}
 		err, ok := a.Value.Any().(error)

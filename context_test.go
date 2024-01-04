@@ -14,14 +14,14 @@ import (
 func TestContextHandler(tt *testing.T) {
 	t := check.T(tt)
 
-	t.Nil(slogx.FromContext(context.Background()))
+	t.Nil(slogx.HandlerFromContext(context.Background()))
 
-	ctx := slogx.NewContext(context.Background(), nil)
-	t.Equal(slogx.FromContext(ctx), nil)
+	ctx := slogx.NewContextWithHandler(context.Background(), nil)
+	t.Equal(slogx.HandlerFromContext(ctx), nil)
 
 	handler := slog.NewTextHandler(os.Stdout, nil)
-	ctx = slogx.NewContext(context.Background(), handler)
-	t.Equal(slogx.FromContext(ctx), handler)
+	ctx = slogx.NewContextWithHandler(context.Background(), handler)
+	t.Equal(slogx.HandlerFromContext(ctx), handler)
 }
 
 func TestContextLogger(tt *testing.T) {

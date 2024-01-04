@@ -12,7 +12,7 @@ type errorAttrs struct { //nolint:errname // Custom naming.
 	attrs []slog.Attr
 }
 
-// Error returns string value of errorAttrs error.
+// Error implements error interface.
 func (e errorAttrs) Error() string { return e.err.Error() }
 
 // Unwrap returns errorAttrs error.

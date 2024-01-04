@@ -22,8 +22,7 @@ type errorAttrsConfig struct{}
 
 type errorAttrsOption func(*config)
 
-// NewError returns errorAttrs error that contains given err and args,
-// modified to []slog.Attr.
+// NewError returns err with attached slog Attrs specified by args.
 func NewError(err error, args ...any) error {
 	if err == nil {
 		return nil

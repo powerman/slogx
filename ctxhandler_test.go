@@ -74,6 +74,11 @@ func TestCtxHandler(tt *testing.T) {
 	buf.Reset()
 	slog.InfoContext(ctx, "some message", "key4", "value4")
 	t.Match(buf.String(), `"level":"INFO","msg":"some message","g":{"key1":"value1","key2":"value2","key4":"value4"}}`)
+
+	// WithAttrs/WithGroup with empty parameter
+	handler := slog.Default().Handler()
+	t.DeepEqual(handler.WithAttrs([]slog.Attr{}), handler)
+	t.DeepEqual(handler.WithGroup(""), handler)
 }
 
 func TestContextWith(tt *testing.T) {

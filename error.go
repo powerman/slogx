@@ -15,7 +15,7 @@ type errorAttrs struct { //nolint:errname // Custom naming.
 // Error implements error interface.
 func (e errorAttrs) Error() string { return e.err.Error() }
 
-// Unwrap returns errorAttrs error.
+// Unwrap returns wrapped error.
 func (e errorAttrs) Unwrap() error { return e.err }
 
 type config struct{}

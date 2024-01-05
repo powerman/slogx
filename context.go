@@ -12,13 +12,13 @@ const (
 	contextKeyHandler
 )
 
-// NewContext returns a new Context that carries value handler.
-func NewContext(ctx context.Context, handler slog.Handler) context.Context {
+// NewContextWithHandler returns a new Context that carries value handler.
+func NewContextWithHandler(ctx context.Context, handler slog.Handler) context.Context {
 	return context.WithValue(ctx, contextKeyHandler, handler)
 }
 
-// FromContext returns a Handler value stored in ctx if exists or nil.
-func FromContext(ctx context.Context) slog.Handler {
+// HandlerFromContext returns a Handler value stored in ctx if exists or nil.
+func HandlerFromContext(ctx context.Context) slog.Handler {
 	handler, _ := ctx.Value(contextKeyHandler).(slog.Handler)
 	return handler
 }

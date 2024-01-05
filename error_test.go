@@ -15,6 +15,8 @@ func TestErrorAttrs(tt *testing.T) {
 	t := check.T(tt)
 	t.Parallel()
 
+	const badKey = "!BADKEY"
+
 	var (
 		e               = "new error"
 		key             = "Key"
@@ -28,7 +30,7 @@ func TestErrorAttrs(tt *testing.T) {
 
 		newErrorBadKey       = slogx.NewError(err, "key1")
 		newErrorBadKeyAttr   = slog.Any("key", newErrorBadKey)
-		attrGroupValueBadKey = slog.Any("", slog.GroupValue(slog.String(slogx.KeyBadKey, "key1"), slog.Any("key", slogx.NewErrorNoAttrs(newErrorBadKey))))
+		attrGroupValueBadKey = slog.Any("", slog.GroupValue(slog.String(badKey, "key1"), slog.Any("key", slogx.NewErrorNoAttrs(newErrorBadKey))))
 
 		newErrorAttr       = slogx.NewError(err, slog.Int("key", 3))
 		newErrorAttrAttr   = slog.Any("", newErrorAttr)
@@ -36,7 +38,7 @@ func TestErrorAttrs(tt *testing.T) {
 
 		newErrorInt             = slogx.NewError(err, 8)
 		newErrorIntAttr         = slog.Any("", newErrorInt)
-		attrGroupValueBadKeyInt = slog.Any("", slog.GroupValue(slog.Any(slogx.KeyBadKey, 8), slog.String("", newErrorInt.Error())))
+		attrGroupValueBadKeyInt = slog.Any("", slog.GroupValue(slog.Any(badKey, 8), slog.String("", newErrorInt.Error())))
 
 		strAttr           = slog.String("key", "value")
 		anyAttr           = slog.Any("key", complex(2.2, 2.7))

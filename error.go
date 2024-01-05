@@ -52,8 +52,7 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slo
 			return a
 		}
 
-		var attrs []slog.Attr
-		attrs = getAllAttrs(attrs, err)
+		attrs := getAllAttrs(err)
 		if len(attrs) == 0 {
 			return a
 		}
@@ -67,14 +66,12 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slo
 	}
 }
 
-func getAllAttrs(attrs []slog.Attr, err error) []slog.Attr {
-	if errAttr, ok := err.(errorAttrs); ok { //nolint:errorlint // Necessary type assertion.
-		attrs = getAllAttrs(attrs, errAttr.Unwrap())
-		attrs = append(attrs, errAttr.attrs...)
-	} else {
-		if e := errors.Unwrap(err); e != nil {
-			attrs = getAllAttrs(attrs, e)
-		}
+func getAllAttrs(err error) []slog.Attr {
+	if err == nil {
+		return nil
 	}
-	return attrs
+	if errAttr, ok := err.(errorAttrs); ok { //nolint:errorlint // Necessary type assertion.
+		return append(getAllAttrs(errors.Unwrap(err)), errAttr.attrs...)
+	}
+	return getAllAttrs(errors.Unwrap(err))
 }

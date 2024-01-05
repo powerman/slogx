@@ -5,63 +5,49 @@ import (
 	"log/slog"
 )
 
-const KeyBadKey = "!BADKEY"
-
 type errorAttrs struct { //nolint:errname // Custom naming.
 	err   error
 	attrs []slog.Attr
 }
 
-type config struct {
+// Error implements error interface.
+func (e errorAttrs) Error() string { return e.err.Error() }
+
+// Unwrap returns wrapped error.
+func (e errorAttrs) Unwrap() error { return e.err }
+
+type errorAttrsConfig struct {
 	groupTopErrorAttrs  bool
 	inlineSubErrorAttrs bool
 }
 
-// Error returns string value of errorAttrs error.
-func (e errorAttrs) Error() string { return e.err.Error() }
+type errorAttrsOption func(*errorAttrsConfig)
 
-// Unwrap returns errorAttrs error.
-func (e errorAttrs) Unwrap() error { return e.err }
-
-type errorAttrsOption func(*config)
-
-// NewError returns errorAttrs error that contains given err and args,
-// modified to []slog.Attr.
+// NewError returns err with attached slog Attrs specified by args.
 func NewError(err error, args ...any) error {
-	if err == nil {
-		return nil
-	}
-	e := errorAttrs{err: err}
-	if len(args) > 0 {
-		e.attrs = argsToAttrSlice(args)
-	}
-	return e
+	return NewErrorAttrs(err, argsToAttrSlice(args)...)
 }
 
-// NewErrorAttrs returns errorAttrs error that contains given err and attrs.
+// NewErrorAttrs returns err with attached slog attrs.
 func NewErrorAttrs(err error, attrs ...slog.Attr) error {
 	if err == nil {
 		return nil
 	}
-	e := errorAttrs{err: err}
-	if len(attrs) > 0 {
-		e.attrs = attrs
-	}
-	return e
+	return errorAttrs{err: err, attrs: attrs}
 }
 
 type errorNoAttrs struct { //nolint:errname // Custom naming.
 	err error
 }
 
-// Error returns string value of errorNoAttrs error.
+// Error implements error interface.
 func (e errorNoAttrs) Error() string { return e.err.Error() }
 
-// Unwrap returns errorNoAttrs error.
+// Unwrap returns wrapped error.
 func (e errorNoAttrs) Unwrap() error { return e.err }
 
-// NewErrorNoAttrs returns errorNoAttrs error that contains only given err.
-// Such error signalize to stop recursive unwrapping and checking for attrs.
+// NewErrorNoAttrs returns error. This type signalize
+// to stop recursive unwrapping and checking for attrs.
 func NewErrorNoAttrs(err error) error {
 	if err == nil {
 		return nil
@@ -69,18 +55,18 @@ func NewErrorNoAttrs(err error) error {
 	return errorNoAttrs{err: err}
 }
 
-// ErrorAttrs returns an slog.ReplaceAttr function that collects all attrs from
-// wrapped errors, orders them as deeper errors come first, top level error come
-// last and appends a.Key and a.Value (as errorNoAttrs type) to the end of
-// accumulated attrs.
+// ErrorAttrs returns an slog.ReplaceAttr function that will replace attr's Value of error type
+// with slog.GroupValue containing all attrs attached to any of recursively unwrapped errors
+// plus original attr's Value.
 //
-// Returned attr's Value is of slog.KindGroup. If groups is empty, Key will be empty,
-// otherwise it will be a.Key.
+// By default returned attr's Key depends on groups:
+// if groups are empty then Key will be empty, otherwise Key will be attr's Key.
+// This behaviour may be changed by given options.
 //
-// If no errorAttrs args found it returns a as is.
-func ErrorAttrs(opts ...errorAttrsOption) func(groups []string, a slog.Attr) slog.Attr {
+// If attr's Value is not of error type or error has no attached attrs then returns original attr.
+func ErrorAttrs(opts ...errorAttrsOption) func(groups []string, attr slog.Attr) slog.Attr {
 	return func(groups []string, a slog.Attr) slog.Attr {
-		if !(a.Value.Kind() == slog.KindAny) {
+		if a.Value.Kind() != slog.KindAny {
 			return a
 		}
 		err, ok := a.Value.Any().(error)
@@ -88,14 +74,13 @@ func ErrorAttrs(opts ...errorAttrsOption) func(groups []string, a slog.Attr) slo
 			return a
 		}
 
-		var attrs []slog.Attr
-		attrs = getAttrs(attrs, err)
+		attrs := getAllAttrs(err)
 		if len(attrs) == 0 {
 			return a
 		}
 		attrs = append(attrs, slog.Any(a.Key, errorNoAttrs{err: err}))
 
-		cfg := &config{}
+		cfg := &errorAttrsConfig{}
 		for _, opt := range opts {
 			opt(cfg)
 		}
@@ -104,33 +89,31 @@ func ErrorAttrs(opts ...errorAttrsOption) func(groups []string, a slog.Attr) slo
 }
 
 func GroupTopErrorAttrs() errorAttrsOption { //nolint:revive // By design.
-	return func(cfg *config) {
+	return func(cfg *errorAttrsConfig) {
 		cfg.groupTopErrorAttrs = true
 	}
 }
 
 func InlineSubErrorAttrs() errorAttrsOption { //nolint:revive // By design.
-	return func(cfg *config) {
+	return func(cfg *errorAttrsConfig) {
 		cfg.inlineSubErrorAttrs = true
 	}
 }
 
-func getAttrs(attrs []slog.Attr, err error) []slog.Attr {
+func getAllAttrs(err error) []slog.Attr {
+	if err == nil {
+		return nil
+	}
 	if _, ok := err.(errorNoAttrs); ok { //nolint:errorlint // Necessary type assertion.
-		return attrs
+		return nil
 	}
 	if errAttr, ok := err.(errorAttrs); ok { //nolint:errorlint // Necessary type assertion.
-		attrs = getAttrs(attrs, errAttr.Unwrap())
-		attrs = append(attrs, errAttr.attrs...)
-	} else {
-		if e := errors.Unwrap(err); e != nil {
-			attrs = getAttrs(attrs, e)
-		}
+		return append(getAllAttrs(errors.Unwrap(err)), errAttr.attrs...)
 	}
-	return attrs
+	return getAllAttrs(errors.Unwrap(err))
 }
 
-func key(key string, groups []string, cfg *config) string {
+func key(key string, groups []string, cfg *errorAttrsConfig) string {
 	groupsIsZero := len(groups) == 0
 	switch {
 	case groupsIsZero && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
@@ -151,38 +134,4 @@ func key(key string, groups []string, cfg *config) string {
 		}
 	}
 	return key
-}
-
-func argsToAttrSlice(args []any) []slog.Attr {
-	var (
-		attr  slog.Attr
-		attrs []slog.Attr
-	)
-	for len(args) > 0 {
-		attr, args = argsToAttr(args)
-		attrs = append(attrs, attr)
-	}
-	return attrs
-}
-
-// argsToAttr turns a prefix of the nonempty args slice into an Attr
-// and returns the unconsumed portion of the slice.
-// If args[0] is an Attr, it returns it.
-// If args[0] is a string, it treats the first two elements as
-// a key-value pair.
-// Otherwise, it treats args[0] as a value with a missing key.
-func argsToAttr(args []any) (slog.Attr, []any) { // Probably will be add with CtxHandler for common use.
-	switch x := args[0].(type) {
-	case string:
-		if len(args) == 1 {
-			return slog.String(KeyBadKey, x), nil
-		}
-		return slog.Any(x, args[1]), args[2:]
-
-	case slog.Attr:
-		return x, args[1:]
-
-	default:
-		return slog.Any(KeyBadKey, x), args[1:]
-	}
 }

@@ -1,0 +1,13 @@
+#!/bin/bash
+export PATH="$PWD/.buildcache/bin:$PATH"
+set -e -o pipefail
+go generate
+
+gotestsum -- \
+    -coverpkg="$(go list ./... | paste -s -d,)" \
+    -coverprofile cover.out \
+    "$@" ./...
+
+go tool cover -func=cover.out | tail -n 1 | xargs echo
+
+test -n "$CI" || go tool cover -html=cover.out

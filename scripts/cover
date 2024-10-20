@@ -1,7 +1,7 @@
 #!/bin/bash
 export PATH="$PWD/.buildcache/bin:$PATH"
 set -e -o pipefail
-go generate
+go generate -run=INSTALL
 
 gotestsum -- \
     -coverpkg="$(go list ./... | paste -s -d,)" \

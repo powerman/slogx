@@ -2,7 +2,7 @@ name: Update Go module doc
 
 on:
   push:
-    tags: v*
+    tags: [v*]
 
 jobs:
 

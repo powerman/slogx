@@ -1,8 +1,7 @@
 #!/bin/bash
 export PATH="$PWD/.buildcache/bin:$PATH"
 set -x -e -o pipefail
-go generate -run=INSTALL
-go generate -skip=INSTALL
+go generate tools.go
 
 shellcheck scripts/*
 

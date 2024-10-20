@@ -2,44 +2,39 @@ name: CI/CD
 
 on:
   push:
-    branches: master
+    tags:
+      - v*
+    branches:
+      - master
   pull_request:
+    branches:
+      - master
   schedule:
     - cron: '0 12 * * 6'
 
 jobs:
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: 'ubuntu-latest'
     timeout-minutes: 30
     strategy:
       matrix:
         go:
-          # TODO Add 'oldstable' after 1.22.0 will be released.
           - 'stable' # Also used for goveralls.
-          - 'tip'
+          - 'oldstable'
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v4
-        if: matrix.go != 'tip'
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           check-latest: true
           cache: false
 
-      - name: Install Go tip
-        if: matrix.go == 'tip'
-        run: |
-          mkdir "$HOME/gotip"
-          curl -sL https://storage.googleapis.com/go-build-snap/go/linux-amd64/$(git ls-remote https://github.com/golang/go.git HEAD | awk '{print $1}').tar.gz -o - | tar -C "$HOME/gotip" -xzf -
-          echo "GOROOT=$HOME/gotip" >> $GITHUB_ENV
-          echo "$HOME/gotip/bin" >> $GITHUB_PATH
-
       - run: go version
 
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         id: cache-go-with-tools
         with:
           path: |
@@ -52,14 +47,12 @@ jobs:
             v1-go-with-tools-${{ runner.os }}-${{ matrix.go }}-${{ hashFiles('tools.go') }}-
             v1-go-with-tools-${{ runner.os }}-${{ matrix.go }}-
 
-      - run: go generate tools.go
-        if: steps.cache-go-with-tools.outputs.cache-hit != 'true'
-
-      - run: .buildcache/bin/golangci-lint run
-      - run: go test -race ./...
+      - run: scripts/test
 
       - name: Report code coverage
         env:
           COVERALLS_TOKEN: ${{ secrets.COVERALLS_TOKEN }}
         if: env.COVERALLS_TOKEN && matrix.go == 'stable'
-        run: .buildcache/bin/goveralls -service=GitHub
+        run: |-
+          scripts/cover
+          .buildcache/bin/goveralls -coverprofile=cover.out -service=GitHub

@@ -5,9 +5,9 @@ go generate
 
 gotestsum -- \
     -coverpkg="$(go list ./... | paste -s -d,)" \
-    -coverprofile cover.out \
+    -coverprofile .buildcache/cover.out \
     "$@" ./...
 
-go tool cover -func=cover.out | tail -n 1 | xargs echo
+go tool cover -func=.buildcache/cover.out | tail -n 1 | xargs echo
 
-test -n "$CI" || go tool cover -html=cover.out
+test -n "$CI" || go tool cover -html=.buildcache/cover.out

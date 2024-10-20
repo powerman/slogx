@@ -3,8 +3,8 @@ module github.com/powerman/slogx
 go 1.22
 
 require (
-	github.com/golang/mock v1.6.0
 	github.com/powerman/check v1.7.0
+	go.uber.org/mock v0.5.0
 )
 
 require (

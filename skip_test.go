@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/powerman/check"
+	"go.uber.org/mock/gomock"
 
 	"github.com/powerman/slogx"
 )

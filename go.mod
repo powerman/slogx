@@ -1,10 +1,10 @@
 module github.com/powerman/slogx
 
-go 1.22
+go 1.23
 
 require (
 	github.com/powerman/check v1.7.0
-	go.uber.org/mock v0.5.0
+	go.uber.org/mock v0.5.2
 )
 
 require (

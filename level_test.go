@@ -31,7 +31,6 @@ func TestParseLevel(tt *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(tt *testing.T) {
 			t := check.T(tt).MustAll()
 			t.Equal(slogx.ParseLevel(tc.levelName), tc.want)

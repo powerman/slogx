@@ -6,7 +6,9 @@ import (
 	"runtime"
 )
 
-const KeyStack = "stack"
+// StackKey is the key used by the [Stack] for the stack trace
+// of the log call. The associated value is a string.
+const StackKey = "stack"
 
 // Stack returns a stack trace formatted as panic output.
 // It excludes a call of Stack() itself.
@@ -21,5 +23,5 @@ func Stack() slog.Attr {
 	copy(buf[line2+1+line3+1:], buf[:line1+1])
 	buf = buf[line2+1+line3+1:]
 
-	return slog.Attr{Key: KeyStack, Value: slog.StringValue(string(buf[:len(buf)-1]))}
+	return slog.Attr{Key: StackKey, Value: slog.StringValue(string(buf[:len(buf)-1]))}
 }

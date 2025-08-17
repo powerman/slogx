@@ -8,7 +8,7 @@
 
 package tools
 
-//go:generate GOINSTALL github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
+//go:generate GOINSTALL github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.4.0
 //go:generate GOINSTALL github.com/mattn/goveralls@v0.0.12
 //go:generate GOINSTALL go.uber.org/mock/mockgen@v0.5.0
 //go:generate GOINSTALL gotest.tools/gotestsum@v1.12.0

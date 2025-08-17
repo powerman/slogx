@@ -16,7 +16,10 @@ func (e errorAttrs) Error() string { return e.err.Error() }
 // Unwrap returns wrapped error.
 func (e errorAttrs) Unwrap() error { return e.err }
 
-type errorAttrsConfig struct{}
+type errorAttrsConfig struct {
+	groupTopErrorAttrs  bool
+	inlineSubErrorAttrs bool
+}
 
 type errorAttrsOption func(*errorAttrsConfig)
 
@@ -61,7 +64,7 @@ func NewErrorNoAttrs(err error) error {
 // This behaviour may be changed by given options.
 //
 // If attr's Value is not of error type or error has no attached attrs then returns original attr.
-func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slog.Attr {
+func ErrorAttrs(opts ...errorAttrsOption) func(groups []string, attr slog.Attr) slog.Attr {
 	return func(groups []string, a slog.Attr) slog.Attr {
 		if a.Value.Kind() != slog.KindAny {
 			return a
@@ -77,11 +80,23 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slo
 		}
 		attrs = append(attrs, slog.Any(a.Key, errorNoAttrs{err: err}))
 
-		var key string
-		if len(groups) > 0 {
-			key = a.Key
+		cfg := &errorAttrsConfig{}
+		for _, opt := range opts {
+			opt(cfg)
 		}
-		return slog.Attr{Key: key, Value: slog.GroupValue(attrs...)}
+		return slog.Attr{Key: key(a.Key, groups, cfg), Value: slog.GroupValue(attrs...)}
+	}
+}
+
+func GroupTopErrorAttrs() errorAttrsOption { //nolint:revive // By design.
+	return func(cfg *errorAttrsConfig) {
+		cfg.groupTopErrorAttrs = true
+	}
+}
+
+func InlineSubErrorAttrs() errorAttrsOption { //nolint:revive // By design.
+	return func(cfg *errorAttrsConfig) {
+		cfg.inlineSubErrorAttrs = true
 	}
 }
 
@@ -96,4 +111,27 @@ func getAllAttrs(err error) []slog.Attr {
 		return append(getAllAttrs(errors.Unwrap(err)), errAttr.attrs...)
 	}
 	return getAllAttrs(errors.Unwrap(err))
+}
+
+func key(key string, groups []string, cfg *errorAttrsConfig) string {
+	groupsIsZero := len(groups) == 0
+	switch {
+	case groupsIsZero && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
+		return key
+	case groupsIsZero && cfg.groupTopErrorAttrs:
+		return key
+	case groupsIsZero && cfg.inlineSubErrorAttrs:
+		return ""
+	case !groupsIsZero && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
+		return ""
+	case !groupsIsZero && cfg.groupTopErrorAttrs:
+		return key
+	case !groupsIsZero && cfg.inlineSubErrorAttrs:
+		return ""
+	default:
+		if groupsIsZero {
+			return ""
+		}
+	}
+	return key
 }

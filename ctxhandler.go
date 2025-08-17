@@ -126,7 +126,7 @@ func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
 		}
 	}
 	for _, op := range h.ops {
-		if len(op.group) > 0 {
+		if op.group != "" {
 			handler = handler.WithGroup(op.group)
 		} else {
 			handler = handler.WithAttrs(op.attrs)
@@ -179,7 +179,8 @@ func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
 	}
 }
 
-func (h CtxHandler) withOp(op handlerOp) *CtxHandler {
-	h.ops = append(h.ops[:len(h.ops):len(h.ops)], op)
-	return &h
+func (h *CtxHandler) withOp(op handlerOp) *CtxHandler {
+	h2 := *h // Create a copy to avoid modifying the original handler.
+	h2.ops = append(h2.ops[:len(h2.ops):len(h2.ops)], op)
+	return &h2
 }

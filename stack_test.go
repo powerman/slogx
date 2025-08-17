@@ -12,7 +12,7 @@ func TestStack(tt *testing.T) {
 	t := check.T(tt)
 
 	stack := slogx.Stack()
-	t.DeepEqual(stack.Key, slogx.KeyStack)
+	t.DeepEqual(stack.Key, slogx.StackKey)
 	t.HasPrefix(stack.Value, "goroutine")
 	t.NotMatch(stack.Value, "github.com/powerman/slogx.Stack()")
 	t.NotMatch(stack.Value, "/slogx/stack.go:")

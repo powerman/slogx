@@ -1,6 +1,6 @@
 module github.com/powerman/slogx
 
-go 1.24
+go 1.24.6
 
 require (
 	github.com/powerman/check v1.9.0

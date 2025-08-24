@@ -10,14 +10,6 @@ go = 'latest'
 # MockGen generates mock implementations of Go interfaces.
 'go:go.uber.org/mock/mockgen' = 'latest'
 
-#--- Format
-# Command goimports updates your Go import lines, adding missing ones and removing unreferenced ones.
-"go:golang.org/x/tools/cmd/goimports" = "latest"
-# GCI, a tool that control golang package import order and make it always deterministic.
-"go:github.com/daixiang0/gci" = "latest"
-# A stricter gofmt.
-gofumpt = "latest"
-
 #--- Lint
 # Static checker for GitHub Actions workflow files.
 actionlint = 'latest'
@@ -77,7 +69,7 @@ run = 'go generate ./...'
 
 [tasks.'fmt:go']
 description = 'Format Go code'
-run = 'goimports -w . && gci write -s standard -s default -s localmodule . && gofumpt -w .'
+run = 'golangci-lint fmt'
 
 [tasks.'lint:workflows']
 description = 'Lint GitHub Action workflows'
@@ -86,6 +78,10 @@ run = 'actionlint'
 [tasks.'lint:go']
 description = 'Lint Go files'
 run = 'golangci-lint run'
+
+[tasks.'lint:go-compile-windows']
+description = 'Check Go test compiles on Windows'
+run = 'GOOS=windows go test -c -o /dev/null ./...'
 
 [tasks.'test:go']
 description = 'Run Go tests for a whole project'

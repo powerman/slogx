@@ -1,41 +1,34 @@
-[tools.actionlint]
+[[tools.actionlint]]
 version = "1.7.7"
 backend = "aqua:rhysd/actionlint"
 
-[tools.gh]
-version = "2.76.2"
+[[tools.gh]]
+version = "2.79.0"
 backend = "aqua:cli/cli"
 
-[tools.git-cliff]
+[tools.gh.platforms.linux-x64]
+checksum = "sha256:e7af0c72a607c0528fda1989f7c8e3be85e67d321889002af0e2938ad9c8fb68"
+size = 17940762
+url = "https://github.com/cli/cli/releases/download/v2.79.0/gh_2.79.0_linux_amd64.tar.gz"
+
+[[tools.git-cliff]]
 version = "2.10.0"
 backend = "aqua:orhun/git-cliff"
 
-[tools.go]
-version = "1.25.0"
+[[tools.go]]
+version = "1.25.1"
 backend = "core:go"
 
 [tools.go.platforms.linux-x64]
-checksum = "sha256:2852af0cb20a13139b3448992e69b868e50ed0f8a1e5940ee1de9e19a123b613"
-size = 59659213
-url = "https://dl.google.com/go/go1.25.0.linux-amd64.tar.gz"
+checksum = "sha256:7716a0d940a0f6ae8e1f3b3f4f36299dc53e31b16840dbd171254312c41ca12e"
+size = 59660846
+url = "https://dl.google.com/go/go1.25.1.linux-amd64.tar.gz"
 
-[tools."go:github.com/daixiang0/gci"]
-version = "0.13.7"
-backend = "go:github.com/daixiang0/gci"
-
-[tools."go:go.uber.org/mock/mockgen"]
+[[tools."go:go.uber.org/mock/mockgen"]]
 version = "0.6.0"
 backend = "go:go.uber.org/mock/mockgen"
 
-[tools."go:golang.org/x/tools/cmd/goimports"]
-version = "0.36.0"
-backend = "go:golang.org/x/tools/cmd/goimports"
-
-[tools.gofumpt]
-version = "0.8.0"
-backend = "aqua:mvdan/gofumpt"
-
-[tools.golangci-lint]
+[[tools.golangci-lint]]
 version = "2.4.0"
 backend = "aqua:golangci/golangci-lint"
 
@@ -44,6 +37,11 @@ checksum = "sha256:fae792524c04424c0ac369f5b8076f04b45cf29fc945a370e55d369a8dc11
 size = 14126779
 url = "https://github.com/golangci/golangci-lint/releases/download/v2.4.0/golangci-lint-2.4.0-linux-amd64.tar.gz"
 
-[tools.gotestsum]
-version = "1.12.3"
+[[tools.gotestsum]]
+version = "1.13.0"
 backend = "aqua:gotestyourself/gotestsum"
+
+[tools.gotestsum.platforms.linux-x64]
+checksum = "sha256:11ccddeaf708ef228889f9fe2f68291a75b27013ddfc3b18156e094f5f40e8ee"
+size = 2622918
+url = "https://github.com/gotestyourself/gotestsum/releases/download/v1.13.0/gotestsum_1.13.0_linux_amd64.tar.gz"

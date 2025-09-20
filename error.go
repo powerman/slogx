@@ -43,15 +43,6 @@ func (e errorNoAttrs) Error() string { return e.err.Error() }
 // Unwrap returns wrapped error.
 func (e errorNoAttrs) Unwrap() error { return e.err }
 
-// NewErrorNoAttrs returns error. This type signalize
-// to stop recursive unwrapping and checking for attrs.
-func NewErrorNoAttrs(err error) error {
-	if err == nil {
-		return nil
-	}
-	return errorNoAttrs{err: err}
-}
-
 // ErrorAttrs returns an slog.ReplaceAttr function that will replace attr's Value of error type
 // with slog.GroupValue containing all attrs attached to any of recursively unwrapped errors
 // plus original attr's Value (error).

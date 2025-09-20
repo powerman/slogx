@@ -16,9 +16,47 @@ func (e errorAttrs) Error() string { return e.err.Error() }
 // Unwrap returns wrapped error.
 func (e errorAttrs) Unwrap() error { return e.err }
 
-type errorAttrsConfig struct{}
+type errorAttrsConfig struct {
+	groupTopErrorAttrs  bool
+	inlineSubErrorAttrs bool
+}
 
-type errorAttrsOption func(*errorAttrsConfig)
+func (cfg errorAttrsConfig) key(key string, groups []string) string {
+	hasGroups := len(groups) != 0
+	switch {
+	case !hasGroups && cfg.groupTopErrorAttrs:
+		return key
+	case hasGroups && cfg.inlineSubErrorAttrs:
+		return ""
+	case !hasGroups:
+		return ""
+	default:
+		return key
+	}
+}
+
+// ErrorAttrsOption is an option for ErrorAttrs.
+type ErrorAttrsOption func(*errorAttrsConfig)
+
+// GroupTopErrorAttrs is an option for ErrorAttrs.
+//
+// By default error attrs are inlined at top level and grouped at sub levels.
+// This option makes attrs to be grouped at top level (when groups is empty).
+func GroupTopErrorAttrs() ErrorAttrsOption {
+	return func(cfg *errorAttrsConfig) {
+		cfg.groupTopErrorAttrs = true
+	}
+}
+
+// InlineSubErrorAttrs is an option for ErrorAttrs.
+//
+// By default error attrs are inlined at top level and grouped at sub levels.
+// This option makes attrs to be inlined at sub levels (when groups is not empty).
+func InlineSubErrorAttrs() ErrorAttrsOption {
+	return func(cfg *errorAttrsConfig) {
+		cfg.inlineSubErrorAttrs = true
+	}
+}
 
 // NewError returns err with attached slog attrs specified by args.
 func NewError(err error, args ...any) error {
@@ -52,7 +90,12 @@ func (e errorNoAttrs) Unwrap() error { return e.err }
 // This behaviour may be changed by given options.
 //
 // If attr's Value is not of error type or error has no attached attrs then returns original attr.
-func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slog.Attr {
+func ErrorAttrs(opts ...ErrorAttrsOption) func(groups []string, attr slog.Attr) slog.Attr {
+	cfg := errorAttrsConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+
 	return func(groups []string, a slog.Attr) slog.Attr {
 		if a.Value.Kind() != slog.KindAny {
 			return a
@@ -68,11 +111,7 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slo
 		}
 		attrs = append(attrs, slog.Any(a.Key, errorNoAttrs{err: err}))
 
-		var key string
-		if len(groups) > 0 {
-			key = a.Key
-		}
-		return slog.Attr{Key: key, Value: slog.GroupValue(attrs...)}
+		return slog.Attr{Key: cfg.key(a.Key, groups), Value: slog.GroupValue(attrs...)}
 	}
 }
 

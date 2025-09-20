@@ -17,7 +17,7 @@ func (e errorNoAttrs) Unwrap() error { return e.err }
 
 type errorAttrs struct { //nolint:errname // Custom naming.
 	err   error
-	attrs []slog.Attr
+	attrs *[]slog.Attr // Pointer to make struct comparable (for tests).
 }
 
 // Error implements error interface.
@@ -36,7 +36,7 @@ func NewErrorAttrs(err error, attrs ...slog.Attr) error {
 	if err == nil {
 		return nil
 	}
-	return errorAttrs{err: err, attrs: attrs}
+	return errorAttrs{err: err, attrs: &attrs}
 }
 
 type errorAttrsConfig struct {
@@ -124,7 +124,7 @@ func getErrorAttrs(err error) []slog.Attr {
 	case errorNoAttrs:
 		return nil
 	case errorAttrs:
-		return append(err2.attrs, getErrorAttrs(errors.Unwrap(err))...)
+		return append(*err2.attrs, getErrorAttrs(errors.Unwrap(err))...)
 	default:
 		return getErrorAttrs(errors.Unwrap(err))
 	}

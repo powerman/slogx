@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"testing"
 
@@ -12,132 +13,158 @@ import (
 	"github.com/powerman/slogx"
 )
 
-// errorNoAttrs returns slogx.errorNoAttrs{err: err}.
-func errorNoAttrs(err error) error {
-	a := slogx.ErrorAttrs()(nil, slog.Any("err", err))
-	if a.Value.Kind() != slog.KindGroup {
-		err = slogx.NewError(err, "_fake", nil)
-		a = slogx.ErrorAttrs()(nil, slog.Any("err", err))
+func removeTime(groups []string, a slog.Attr) slog.Attr {
+	if a.Key == slog.TimeKey && len(groups) == 0 {
+		return slog.Attr{}
 	}
-	group := a.Value.Group()
-	a = group[len(group)-1]
-	return a.Value.Any().(error)
+	return a
 }
 
-func TestErrorAttrs(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
-
-	const badKey = "!BADKEY"
-
-	var (
-		e               = "new error"
-		key             = "Key"
-		group           = []string{"group"}
-		err             = errors.New(e) //nolint:err113 // False positive.
-		newError        = slogx.NewError(err, "key1", "value1", "key2", "value2")
-		newErrorAttrs   = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
-		wrapedError     = fmt.Errorf("error: %w", err)
-		newErrorNoAttrs = errorNoAttrs(wrapedError)
-		errorAttrsFunc  = slogx.ErrorAttrs()
-
-		newErrorBadKey       = slogx.NewError(err, "key1")
-		newErrorBadKeyAttr   = slog.Any("key", newErrorBadKey)
-		attrGroupValueBadKey = slog.Any("", slog.GroupValue(slog.String(badKey, "key1"), slog.Any("key", errorNoAttrs(newErrorBadKey))))
-
-		newErrorAttr       = slogx.NewError(err, slog.Int("key", 3))
-		newErrorAttrAttr   = slog.Any("", newErrorAttr)
-		attrGroupValueAttr = slog.Any("", slog.GroupValue(slog.Int("key", 3), slog.String("", newErrorAttr.Error())))
-
-		newErrorInt             = slogx.NewError(err, 8)
-		newErrorIntAttr         = slog.Any("", newErrorInt)
-		attrGroupValueBadKeyInt = slog.Any("", slog.GroupValue(slog.Any(badKey, 8), slog.String("", newErrorInt.Error())))
-
-		strAttr = slog.String("key", "value")
-		anyAttr = slog.Any("key", complex(2.2, 2.7))
-		errAttr = slog.Any("key", err)
-
-		attrGroupValue    = slog.Any("", slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.String(key, "new error")))
-		attrGroupValueKey = slog.Any(key, slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.String(key, "new error")))
-
-		wrapedError1 = fmt.Errorf("error1: %w", err)
-		wrapedError2 = fmt.Errorf("error2: %w", newError)
-		wrapedError3 = fmt.Errorf("error3: %w", newErrorAttrs)
-		value1       = slog.AnyValue(wrapedError1)
-		groupValue2  = slog.GroupValue(slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any(key, errorNoAttrs(wrapedError2)))
-		groupValue3  = slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any(key, errorNoAttrs(wrapedError3)))
-	)
-
-	t.DeepEqual(slogx.NewError(nil), nil)
-	t.DeepEqual(slogx.NewErrorAttrs(nil), nil)
-
-	t.DeepEqual(slogx.NewError(err).Error(), e)
-	t.DeepEqual(errors.Unwrap(errors.Unwrap(newErrorNoAttrs)), wrapedError)
-
-	t.Equal(errorAttrsFunc(nil, newErrorBadKeyAttr).String(), attrGroupValueBadKey.String())
-	t.DeepEqual(errorAttrsFunc(nil, newErrorAttrAttr).String(), attrGroupValueAttr.String())
-	t.DeepEqual(errorAttrsFunc(nil, newErrorIntAttr).String(), attrGroupValueBadKeyInt.String())
-
-	t.DeepEqual(errorAttrsFunc(nil, strAttr), strAttr)
-	t.DeepEqual(errorAttrsFunc(nil, anyAttr), anyAttr)
-	t.DeepEqual(errorAttrsFunc(nil, errAttr), errAttr)
-
-	t.Equal(errorAttrsFunc(nil, slog.Any(key, newErrorAttrs)).String(), attrGroupValue.String())
-	t.Equal(errorAttrsFunc(group, slog.Any(key, newErrorAttrs)).String(), attrGroupValueKey.String())
-
-	t.DeepEqual(errorAttrsFunc(nil, slog.Any(key, wrapedError1)), slog.Attr{Key: key, Value: value1})
-	t.DeepEqual(errorAttrsFunc(nil, slog.Any(key, wrapedError2)), slog.Attr{Key: "", Value: groupValue2})
-	t.DeepEqual(errorAttrsFunc(group, slog.Any(key, wrapedError3)), slog.Attr{Key: key, Value: groupValue3})
+func newLog(fs ...func([]string, slog.Attr) slog.Attr) (*slog.Logger, *bytes.Buffer) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
+		ReplaceAttr: slogx.ChainReplaceAttr(append(fs, removeTime)...),
+	}))
+	return log, &buf
 }
 
-func TestErrorAttrsOptions(tt *testing.T) {
+func TestErrorAttrs_NewError(tt *testing.T) {
 	t := check.T(tt)
 	t.Parallel()
-
 	var (
-		buf bytes.Buffer
-
-		fGroupAttrs          = slogx.ErrorAttrs(slogx.GroupTopErrorAttrs())
-		fInlineAttrs         = slogx.ErrorAttrs(slogx.InlineSubErrorAttrs())
-		fGroupAndInlineAttrs = slogx.ErrorAttrs(slogx.GroupTopErrorAttrs(), slogx.InlineSubErrorAttrs())
-
-		err            = errors.New("new error") //nolint:err113 // False positive.
-		newError       = slogx.NewError(err, "key1", "value1", "key2", "value2")
-		newErrorAttrs  = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
-		errorAttrsAttr = slog.Any("key", newErrorAttrs)
-		errWithoutAttr = slog.Any("key", err)
-
-		attrWithKey = slog.Any(
-			"key",
-			slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any("key", errorNoAttrs(err))),
-		)
-		attrWithoutKey = slog.Any(
-			"",
-			slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any("key", errorNoAttrs(err))),
-		)
+		log, buf = newLog(slogx.ErrorAttrs())
+		args     = []any{"k1", "v1", slog.String("k2", "v2")}
+		attrs    = []slog.Attr{slog.Int("k3", 3), slog.Int("k4", 4)}
+		err1     = slogx.NewError(io.EOF)
+		err2     = slogx.NewErrorAttrs(io.EOF)
+		err3     = slogx.NewError(io.EOF, args...)
+		err4     = slogx.NewErrorAttrs(io.EOF, attrs...)
 	)
 
-	t.DeepEqual((fGroupAndInlineAttrs([]string{"g"}, errWithoutAttr)), errWithoutAttr)
+	t.Nil(slogx.NewError(nil))
+	t.Nil(slogx.NewError(nil, args...))
+	t.Nil(slogx.NewErrorAttrs(nil))
+	t.Nil(slogx.NewErrorAttrs(nil, attrs...))
 
 	tests := []struct {
-		f      func(groups []string, a slog.Attr) slog.Attr
-		groups []string
-		want   slog.Attr
+		err  error
+		want string
 	}{
-		{fGroupAttrs, []string{}, attrWithKey},
-		{fGroupAttrs, []string{"g"}, attrWithKey},
-		{fInlineAttrs, []string{}, attrWithoutKey},
-		{fInlineAttrs, []string{"g"}, attrWithoutKey},
-		{fGroupAndInlineAttrs, []string{}, attrWithKey},
-		{fGroupAndInlineAttrs, []string{"g"}, attrWithoutKey},
+		{err1, "err=EOF"},
+		{err2, "err=EOF"},
+		{err3, "k1=v1 k2=v2 err=EOF"},
+		{err4, "k3=3 k4=4 err=EOF"},
 	}
-
 	for _, tc := range tests {
 		t.Run("", func(tt *testing.T) {
-			t := check.T(tt).MustAll()
+			t := check.T(tt)
 
 			buf.Reset()
-			t.Equal((tc.f(tc.groups, errorAttrsAttr)).String(), tc.want.String())
+			log.Info("Msg", "err", tc.err)
+			t.Equal(buf.String(), "level=INFO msg=Msg "+tc.want+"\n")
+
+			t.Equal(tc.err.Error(), io.EOF.Error())
+			t.Equal(errors.Unwrap(tc.err), io.EOF)
+		})
+	}
+}
+
+func TestErrorAttrs_ReturnOriginal(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+
+	tests := []struct {
+		attr slog.Attr
+	}{
+		{slog.Int("not_any", 1)},
+		{slog.Any("not_error", 2)},
+		{slog.Any("no_attrs", io.EOF)},
+		{slog.Any("empty_args", slogx.NewError(io.EOF))},
+		{slog.Any("empty_attrs", slogx.NewErrorAttrs(io.EOF))},
+	}
+	for _, tc := range tests {
+		t.Run(tc.attr.Key, func(tt *testing.T) {
+			t := check.T(tt)
+			attr := slogx.ErrorAttrs()(nil, tc.attr)
+			t.True(tc.attr.Equal(attr))
+		})
+	}
+}
+
+func TestErrorAttrs_ExpandOnce(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	log, buf := newLog(slogx.ErrorAttrs(), slogx.ErrorAttrs())
+
+	log.Info("Msg", "err", slogx.NewError(io.EOF, "k", "v"))
+	t.Equal(buf.String(), "level=INFO msg=Msg k=v err=EOF\n")
+}
+
+func TestErrorAttrs_Wrapped(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var (
+		log, buf = newLog(slogx.ErrorAttrs())
+		err1     = slogx.NewError(io.EOF, "k1", 1, "k2", 2)
+		err2     = fmt.Errorf("wrap2: %w", err1)
+		err3     = slogx.NewError(err2, "k3", 3, "k4", 4)
+		err4     = fmt.Errorf("wrap4: %w", err3)
+	)
+
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{err1, `k1=1 k2=2 err=EOF`},
+		{err2, `k1=1 k2=2 err="wrap2: EOF"`},
+		{err3, `k3=3 k4=4 k1=1 k2=2 err="wrap2: EOF"`},
+		{err4, `k3=3 k4=4 k1=1 k2=2 err="wrap4: wrap2: EOF"`},
+	}
+	for _, tc := range tests {
+		t.Run("", func(tt *testing.T) {
+			t := check.T(tt)
+
+			buf.Reset()
+			log.Info("Msg", "err", tc.err)
+			t.Equal(buf.String(), "level=INFO msg=Msg "+tc.want+"\n")
+		})
+	}
+}
+
+func TestErrorAttrs_Group(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	err := slogx.NewError(io.EOF, "k1", 1)
+
+	tests := []struct {
+		opts []slogx.ErrorAttrsOption
+		want string
+	}{
+		{
+			[]slogx.ErrorAttrsOption{},
+			"k3=3 k1=1 err=EOF sub.k2=2 sub.err.k1=1 sub.err.err=EOF",
+		},
+		{
+			[]slogx.ErrorAttrsOption{slogx.GroupTopErrorAttrs()},
+			"k3=3 err.k1=1 err.err=EOF sub.k2=2 sub.err.k1=1 sub.err.err=EOF",
+		},
+		{
+			[]slogx.ErrorAttrsOption{slogx.InlineSubErrorAttrs()},
+			"k3=3 k1=1 err=EOF sub.k2=2 sub.k1=1 sub.err=EOF",
+		},
+		{
+			[]slogx.ErrorAttrsOption{slogx.GroupTopErrorAttrs(), slogx.InlineSubErrorAttrs()},
+			"k3=3 err.k1=1 err.err=EOF sub.k2=2 sub.k1=1 sub.err=EOF",
+		},
+	}
+	for _, tc := range tests {
+		t.Run("", func(tt *testing.T) {
+			t := check.T(tt)
+			log, buf := newLog(slogx.ErrorAttrs(tc.opts...))
+			log.Info("Msg",
+				slog.Int("k3", 3), slog.Any("err", err),
+				slog.Group("sub", "k2", 2, "err", err))
+			t.Equal(buf.String(), "level=INFO msg=Msg "+tc.want+"\n")
 		})
 	}
 }

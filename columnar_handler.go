@@ -11,6 +11,7 @@ import (
 	"strings"
 )
 
+// KeyPackage is the key used to log package name if AddPackage option is set.
 const KeyPackage = "package"
 
 // ColumnarHandler is a modified version of slog.TextHandler that provides
@@ -28,9 +29,10 @@ type ColumnarHandler struct {
 // ColumnarHandlerOption is an option that allows to add package name to attrs
 // and set mapping for package names. It also supports slog.HandlerOptions.
 type ColumnarHandlerOption struct {
+	slog.HandlerOptions
+
 	AddPackage bool
 	ModPackage map[string]string
-	slog.HandlerOptions
 }
 
 type data struct {
@@ -60,8 +62,8 @@ func NewColumnarHandler(w io.Writer, opts *ColumnarHandlerOption) *ColumnarHandl
 // whether the ColumnarHandler handles records at the given level.
 func (h *ColumnarHandler) Enabled(_ context.Context, l slog.Level) bool {
 	minLevel := slog.LevelInfo
-	if h.opts.HandlerOptions.Level != nil {
-		minLevel = h.opts.HandlerOptions.Level.Level()
+	if h.opts.Level != nil {
+		minLevel = h.opts.Level.Level()
 	}
 	return l >= minLevel
 }
@@ -138,9 +140,7 @@ func (h *ColumnarHandler) SetAttrsSufix(attrs []slog.Attr) *ColumnarHandler {
 // as fmt.Sprintf(format,val).
 func (h *ColumnarHandler) SetAttrsFormat(format map[string]string) *ColumnarHandler {
 	columnarHandler := h.clone()
-	for k, v := range format {
-		columnarHandler.attrsFormat[k] = v
-	}
+	maps.Copy(columnarHandler.attrsFormat, format)
 	return columnarHandler
 }
 
@@ -158,7 +158,7 @@ func (h *ColumnarHandler) clone() *ColumnarHandler {
 func (h *ColumnarHandler) addAttrsAndGroups(handler slog.Handler) slog.Handler {
 	handler = handler.WithAttrs(h.formatValues(h.listPrefix))
 	for _, op := range h.opList {
-		if len(op.group) > 0 {
+		if op.group != "" {
 			handler = handler.WithGroup(op.group)
 		} else {
 			handler = handler.WithAttrs(h.formatValues(op.attrs))

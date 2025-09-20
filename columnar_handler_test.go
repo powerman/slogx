@@ -84,7 +84,6 @@ func TestColumnarHandlerPackage(tt *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run("", func(tt *testing.T) {
 			t := check.T(tt).MustAll()
 
@@ -109,7 +108,7 @@ func TestColumnarHandlerAttrsGroups(tt *testing.T) {
 	r := slog.NewRecord(time.Now(), slog.LevelInfo, "message", 0)
 	ch := slogx.NewColumnarHandler(&buf, &slogx.ColumnarHandlerOption{
 		HandlerOptions: slog.HandlerOptions{
-			ReplaceAttr: func(groupe []string, a slog.Attr) slog.Attr {
+			ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 				if a.Key == slog.TimeKey {
 					return slog.Attr{}
 				}
@@ -155,7 +154,7 @@ func TestColumnarHandlerPrefixSuffix(tt *testing.T) {
 			"github.com/powerman/...": "pkg",
 		},
 		HandlerOptions: slog.HandlerOptions{
-			ReplaceAttr: func(groupe []string, a slog.Attr) slog.Attr {
+			ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 				if a.Key == slog.TimeKey {
 					return slog.Attr{}
 				}
@@ -183,7 +182,10 @@ func TestColumnarHandlerPrefixSuffix(tt *testing.T) {
 	ch = ch.PrependAttrsSufix([]slog.Attr{slog.Int("suffixKey3", 3), slog.Int("suffixKey4", 4)})
 	ch = ch.PrependAttrsSufix([]slog.Attr{slog.Int("suffixKey5", 5)})
 	_ = ch.Handle(ctx, r)
-	t.Equal(buf.String(), "level=INFO msg=message package=pkg prefixKey3=3 key1=value1 g.key2=value2 g.suffixKey5=5 g.suffixKey3=3 g.suffixKey4=4 g.suffixKey1=suffixValue1 g.suffixKey2=suffixValue2\n")
+	t.Equal(
+		buf.String(),
+		"level=INFO msg=message package=pkg prefixKey3=3 key1=value1 g.key2=value2 g.suffixKey5=5 g.suffixKey3=3 g.suffixKey4=4 g.suffixKey1=suffixValue1 g.suffixKey2=suffixValue2\n",
+	)
 	buf.Reset()
 	ch = ch.SetAttrsSufix([]slog.Attr{slog.String("suffixKey6", "suffixValue6")})
 	_ = ch.Handle(ctx, r)
@@ -205,7 +207,7 @@ func TestColumnarHandlerFormat(tt *testing.T) {
 
 	ch := slogx.NewColumnarHandler(&buf, &slogx.ColumnarHandlerOption{
 		HandlerOptions: slog.HandlerOptions{
-			ReplaceAttr: func(groupe []string, a slog.Attr) slog.Attr {
+			ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 				if a.Key == slog.TimeKey {
 					return slog.Attr{}
 				}

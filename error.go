@@ -33,6 +33,16 @@ func NewErrorAttrs(err error, attrs ...slog.Attr) error {
 	return errorAttrs{err: err, attrs: attrs}
 }
 
+type errorNoAttrs struct { //nolint:errname // Custom naming.
+	err error
+}
+
+// Error implements error interface.
+func (e errorNoAttrs) Error() string { return e.err.Error() }
+
+// Unwrap returns wrapped error.
+func (e errorNoAttrs) Unwrap() error { return e.err }
+
 // ErrorAttrs returns an slog.ReplaceAttr function that will replace attr's Value of error type
 // with slog.GroupValue containing all attrs attached to any of recursively unwrapped errors
 // plus original attr's Value (error).
@@ -56,7 +66,7 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slo
 		if len(attrs) == 0 {
 			return a
 		}
-		attrs = append(attrs, slog.String(a.Key, a.Value.String()))
+		attrs = append(attrs, slog.Any(a.Key, errorNoAttrs{err: err}))
 
 		var key string
 		if len(groups) > 0 {
@@ -68,6 +78,9 @@ func ErrorAttrs(_ ...errorAttrsOption) func(groups []string, attr slog.Attr) slo
 
 func getAllAttrs(err error) []slog.Attr {
 	if err == nil {
+		return nil
+	}
+	if _, ok := err.(errorNoAttrs); ok { //nolint:errorlint // Necessary type assertion.
 		return nil
 	}
 	if errAttr, ok := err.(errorAttrs); ok { //nolint:errorlint // Necessary type assertion.

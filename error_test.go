@@ -109,11 +109,11 @@ func TestErrorAttrsOptions(tt *testing.T) {
 
 		attrWithKey = slog.Any(
 			"key",
-			slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any("key", slogx.NewErrorNoAttrs(err))),
+			slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any("key", errorNoAttrs(err))),
 		)
 		attrWithoutKey = slog.Any(
 			"",
-			slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any("key", slogx.NewErrorNoAttrs(err))),
+			slog.GroupValue(slog.Int("key3", 3), slog.Int("key4", 4), slog.Any("key1", "value1"), slog.Any("key2", "value2"), slog.Any("key", errorNoAttrs(err))),
 		)
 	)
 

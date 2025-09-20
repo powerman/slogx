@@ -107,22 +107,13 @@ func getAllAttrs(err error) []slog.Attr {
 func key(key string, groups []string, cfg *errorAttrsConfig) string {
 	groupsIsZero := len(groups) == 0
 	switch {
-	case groupsIsZero && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
-		return key
 	case groupsIsZero && cfg.groupTopErrorAttrs:
-		return key
-	case groupsIsZero && cfg.inlineSubErrorAttrs:
-		return ""
-	case !groupsIsZero && cfg.groupTopErrorAttrs && cfg.inlineSubErrorAttrs:
-		return ""
-	case !groupsIsZero && cfg.groupTopErrorAttrs:
 		return key
 	case !groupsIsZero && cfg.inlineSubErrorAttrs:
 		return ""
+	case groupsIsZero:
+		return ""
 	default:
-		if groupsIsZero {
-			return ""
-		}
+		return key
 	}
-	return key
 }

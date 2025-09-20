@@ -27,13 +27,13 @@ func TestLogSkip(tt *testing.T) {
 	t.Panic(func() { slogx.LogSkip(ctx, 0, nil, slog.LevelError, "message", "err", io.EOF) })
 
 	slogx.LogSkip(ctx, 0, h, slog.LevelError, "message", "err", io.EOF)
-	t.Match(buf.String(), "level=ERROR source=\\S*/slogx/skip_test.go:29 msg=message err=EOF")
+	t.Match(buf.String(), "level=ERROR source=\\S*/skip_test.go:29 msg=message err=EOF")
 
 	buf.Reset()
 	func() {
 		slogx.LogSkip(ctx, 1, h, slog.LevelError, "message", "err", io.EOF)
 	}()
-	t.Match(buf.String(), "level=ERROR source=\\S*/slogx/skip_test.go:35 msg=message err=EOF")
+	t.Match(buf.String(), "level=ERROR source=\\S*/skip_test.go:35 msg=message err=EOF")
 }
 
 func TestLogAttrsSkip(tt *testing.T) {
@@ -52,13 +52,13 @@ func TestLogAttrsSkip(tt *testing.T) {
 	})
 
 	slogx.LogAttrsSkip(ctx, 0, h, slog.LevelWarn, "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
-	t.Match(buf.String(), "level=WARN source=\\S*/slogx/skip_test.go:54 msg=message ID=18")
+	t.Match(buf.String(), "level=WARN source=\\S*/skip_test.go:54 msg=message ID=18")
 
 	buf.Reset()
 	func() {
 		slogx.LogAttrsSkip(ctx, 1, h, slog.LevelWarn, "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
 	}()
-	t.Match(buf.String(), "level=WARN source=\\S*/slogx/skip_test.go:60 msg=message ID=18")
+	t.Match(buf.String(), "level=WARN source=\\S*/skip_test.go:60 msg=message ID=18")
 }
 
 func TestLogSkipCtx(tt *testing.T) {

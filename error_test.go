@@ -21,7 +21,7 @@ func TestErrorAttrs(tt *testing.T) {
 		e              = "new error"
 		key            = "Key"
 		group          = []string{"group"}
-		err            = errors.New(e) //nolint:goerr113 // False positive. ???
+		err            = errors.New(e) //nolint:err113 // False positive.
 		newError       = slogx.NewError(err, "key1", "value1", "key2", "value2")
 		newErrorAttrs  = slogx.NewErrorAttrs(newError, slog.Int("key3", 3), slog.Int("key4", 4))
 		errorAttrsFunc = slogx.ErrorAttrs()

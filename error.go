@@ -105,7 +105,7 @@ func ErrorAttrs(opts ...ErrorAttrsOption) func(groups []string, attr slog.Attr) 
 			return a
 		}
 
-		attrs := getAllAttrs(err)
+		attrs := getErrorAttrs(err)
 		if len(attrs) == 0 {
 			return a
 		}
@@ -115,15 +115,17 @@ func ErrorAttrs(opts ...ErrorAttrsOption) func(groups []string, attr slog.Attr) 
 	}
 }
 
-func getAllAttrs(err error) []slog.Attr {
-	if err == nil {
+// getErrorAttrs returns all slog attrs attached to err and its wrapped errors,
+// in order from outer to inner.
+func getErrorAttrs(err error) []slog.Attr {
+	switch err2 := err.(type) { //nolint:errorlint // We want to check for specific types.
+	case nil:
 		return nil
-	}
-	if _, ok := err.(errorNoAttrs); ok { //nolint:errorlint // Necessary type assertion.
+	case errorNoAttrs:
 		return nil
+	case errorAttrs:
+		return append(err2.attrs, getErrorAttrs(errors.Unwrap(err))...)
+	default:
+		return getErrorAttrs(errors.Unwrap(err))
 	}
-	if errAttr, ok := err.(errorAttrs); ok { //nolint:errorlint // Necessary type assertion.
-		return append(errAttr.attrs, getAllAttrs(errors.Unwrap(err))...)
-	}
-	return getAllAttrs(errors.Unwrap(err))
 }

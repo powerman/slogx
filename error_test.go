@@ -131,6 +131,67 @@ func TestErrorAttrs_Wrapped(tt *testing.T) {
 	}
 }
 
+func TestErrorAttrs_Join(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var (
+		log, buf     = newLog(slogx.ErrorAttrs())
+		err1         = slogx.NewError(io.EOF, "k1", 1, "k2", 2)
+		err1wrap     = fmt.Errorf("wrap1: %w", err1)
+		err2         = slogx.NewError(io.ErrUnexpectedEOF, "k3", 3, "k4", 4)
+		err2wrap     = fmt.Errorf("wrap2: %w", err2)
+		err3         = slogx.NewError(io.ErrShortWrite, "k5", 5)
+		err4         = io.ErrShortBuffer
+		err12        = errors.Join(err1wrap, err2wrap)
+		err12wrap    = fmt.Errorf("wrap12: %w", err12)
+		err1234      = errors.Join(err12, errors.Join(err3, err4))
+		err1234wrap  = slogx.NewError(fmt.Errorf("wrap1234: %w", err1234), "k6", 6)
+		err12wrap34  = errors.Join(err12wrap, err3, err4)
+		err1234list  = errors.Join(err1, err2, err3, err4)
+		err1234stack = errors.Join(errors.Join(errors.Join(err1, err2), err3), err4)
+	)
+
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{err12, `k1=1 k2=2 err="wrap1: EOF"` +
+			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"`},
+
+		{err12wrap, `k1=1 k2=2 err="wrap12: wrap1: EOF"` +
+			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"`},
+		{err1234, `k1=1 k2=2 err="wrap1: EOF"` +
+			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
+			` err-4.k5=5 err-4.err="short write"` +
+			` err-4.err-3.err="short buffer"`},
+		{err1234wrap, `k6=6 k1=1 k2=2 err="wrap1234: wrap1: EOF"` +
+			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
+			` err-4.k5=5 err-4.err="short write"` +
+			` err-4.err-3.err="short buffer"`},
+		{err12wrap34, `k1=1 k2=2 err="wrap12: wrap1: EOF"` +
+			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
+			` err-3.k5=5 err-3.err="short write"` +
+			` err-4.err="short buffer"`},
+		{err1234list, `k1=1 k2=2 err=EOF` +
+			` err-2.k3=3 err-2.k4=4 err-2.err="unexpected EOF"` +
+			` err-3.k5=5 err-3.err="short write"` +
+			` err-4.err="short buffer"`},
+		{err1234stack, `k1=1 k2=2 err=EOF` +
+			` err-2.k3=3 err-2.k4=4 err-2.err="unexpected EOF"` +
+			` err-3.k5=5 err-3.err="short write"` +
+			` err-4.err="short buffer"`},
+	}
+	for _, tc := range tests {
+		t.Run("", func(tt *testing.T) {
+			t := check.T(tt)
+
+			buf.Reset()
+			log.Info("Msg", "err", tc.err)
+			t.Equal(buf.String(), "level=INFO msg=Msg "+tc.want+"\n")
+		})
+	}
+}
+
 func TestErrorAttrs_Group(tt *testing.T) {
 	t := check.T(tt)
 	t.Parallel()

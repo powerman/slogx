@@ -2,15 +2,45 @@ package slogx
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
+	"strings"
 )
 
 type errorNoAttrs struct { //nolint:errname // Custom naming.
 	err error
+	msg string
+}
+
+// newErrorNoAttrs returns err wrapped in errorNoAttrs.
+// If err wraps other errors then their messages are removed from the end of err's message.
+func newErrorNoAttrs(err error) error {
+	msg := err.Error()
+	for e := err; e != nil; {
+		e2, ok := e.(interface{ Unwrap() []error })
+		if !ok {
+			e = errors.Unwrap(e)
+			continue
+		}
+
+		es := e2.Unwrap()
+		for i := len(es) - 1; i > 0; i-- {
+			if strings.HasSuffix(msg, "\n"+es[i].Error()) {
+				msg = strings.TrimSuffix(msg, "\n"+es[i].Error())
+			}
+		}
+
+		if len(es) > 0 {
+			e = es[0]
+		} else {
+			e = nil
+		}
+	}
+	return errorNoAttrs{err: err, msg: msg}
 }
 
 // Error implements error interface.
-func (e errorNoAttrs) Error() string { return e.err.Error() }
+func (e errorNoAttrs) Error() string { return e.msg }
 
 // Unwrap returns wrapped error.
 func (e errorNoAttrs) Unwrap() error { return e.err }
@@ -105,11 +135,12 @@ func ErrorAttrs(opts ...ErrorAttrsOption) func(groups []string, attr slog.Attr) 
 			return a
 		}
 
-		attrs := getErrorAttrs(err)
-		if len(attrs) == 0 {
+		attrs, rest := getErrorAttrs(nil, a.Key, err)
+		if len(attrs)+len(rest) == 0 {
 			return a
 		}
-		attrs = append(attrs, slog.Any(a.Key, errorNoAttrs{err: err}))
+		attrs = append(attrs, slog.Any(a.Key, newErrorNoAttrs(err)))
+		attrs = append(attrs, rest...)
 
 		return slog.Attr{Key: cfg.key(a.Key, groups), Value: slog.GroupValue(attrs...)}
 	}
@@ -117,15 +148,37 @@ func ErrorAttrs(opts ...ErrorAttrsOption) func(groups []string, attr slog.Attr) 
 
 // getErrorAttrs returns all slog attrs attached to err and its wrapped errors,
 // in order from outer to inner.
-func getErrorAttrs(err error) []slog.Attr {
+func getErrorAttrs(errorNum *int, key string, err error) (first []slog.Attr, rest []slog.Attr) {
+	if errorNum == nil {
+		num := 1
+		errorNum = &num
+	}
+
 	switch err2 := err.(type) { //nolint:errorlint // We want to check for specific types.
 	case nil:
-		return nil
+		return nil, nil
 	case errorNoAttrs:
-		return nil
+		return nil, nil
 	case errorAttrs:
-		return append(*err2.attrs, getErrorAttrs(errors.Unwrap(err))...)
+		first, rest = getErrorAttrs(errorNum, key, errors.Unwrap(err))
+		return append(*err2.attrs, first...), rest
+	case interface{ Unwrap() []error }:
+		errs := err2.Unwrap()
+		if len(errs) == 0 {
+			return nil, nil
+		}
+		first, rest = getErrorAttrs(errorNum, key, errs[0])
+		for i := 1; i < len(errs); i++ {
+			subFirst, subRest := getErrorAttrs(errorNum, key, errs[i])
+			*errorNum++
+			subFirst = append(subFirst, slog.Any(key, newErrorNoAttrs(errs[i])))
+			rest = append(rest, slog.Attr{
+				Key:   fmt.Sprintf("%s-%d", key, *errorNum),
+				Value: slog.GroupValue(append(subFirst, subRest...)...),
+			})
+		}
+		return first, rest
 	default:
-		return getErrorAttrs(errors.Unwrap(err))
+		return getErrorAttrs(errorNum, key, errors.Unwrap(err))
 	}
 }

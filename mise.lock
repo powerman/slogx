@@ -3,17 +3,22 @@ version = "1.7.7"
 backend = "aqua:rhysd/actionlint"
 
 [[tools.gh]]
-version = "2.79.0"
+version = "2.80.0"
 backend = "aqua:cli/cli"
 
 [tools.gh.platforms.linux-x64]
-checksum = "sha256:e7af0c72a607c0528fda1989f7c8e3be85e67d321889002af0e2938ad9c8fb68"
-size = 17940762
-url = "https://github.com/cli/cli/releases/download/v2.79.0/gh_2.79.0_linux_amd64.tar.gz"
+checksum = "sha256:e0afffbf36548194aed8a1bdaf474314857a808b1b1cfa38743e2f4ed6a35b0b"
+size = 18079593
+url = "https://github.com/cli/cli/releases/download/v2.80.0/gh_2.80.0_linux_amd64.tar.gz"
 
 [[tools.git-cliff]]
-version = "2.10.0"
+version = "2.10.1"
 backend = "aqua:orhun/git-cliff"
+
+[tools.git-cliff.platforms.linux-x64]
+checksum = "sha512:98271f6c56ec89a50d88707c7a460f100ad8f3e36a9c7a086682c2c5c1bd3c8d5e8125a0281bb28eb38e39b4dd7db3cd6e047e9d670cbb14171812d6fc84dd38"
+size = 7376565
+url = "https://github.com/orhun/git-cliff/releases/download/v2.10.1/git-cliff-2.10.1-x86_64-unknown-linux-musl.tar.gz"
 
 [[tools.go]]
 version = "1.25.1"
@@ -29,13 +34,13 @@ version = "0.6.0"
 backend = "go:go.uber.org/mock/mockgen"
 
 [[tools.golangci-lint]]
-version = "2.4.0"
+version = "2.5.0"
 backend = "aqua:golangci/golangci-lint"
 
 [tools.golangci-lint.platforms.linux-x64]
-checksum = "sha256:fae792524c04424c0ac369f5b8076f04b45cf29fc945a370e55d369a8dc11840"
-size = 14126779
-url = "https://github.com/golangci/golangci-lint/releases/download/v2.4.0/golangci-lint-2.4.0-linux-amd64.tar.gz"
+checksum = "sha256:c77313a77e19b06123962c411d9943cc0d092bbec76b956104d18964e274902e"
+size = 14221503
+url = "https://github.com/golangci/golangci-lint/releases/download/v2.5.0/golangci-lint-2.5.0-linux-amd64.tar.gz"
 
 [[tools.gotestsum]]
 version = "1.13.0"

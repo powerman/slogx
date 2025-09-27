@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"github.com/powerman/slogx/internal"
 )
 
 type errorNoAttrs struct { //nolint:errname // Custom naming.
@@ -58,7 +60,7 @@ func (e errorAttrs) Unwrap() error { return e.err }
 
 // NewError returns err with attached slog attrs specified by args.
 func NewError(err error, args ...any) error {
-	return NewErrorAttrs(err, argsToAttrSlice(args)...)
+	return NewErrorAttrs(err, internal.ArgsToAttrSlice(args)...)
 }
 
 // NewErrorAttrs returns err with attached slog attrs.

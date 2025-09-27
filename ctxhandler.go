@@ -3,10 +3,11 @@ package slogx
 import (
 	"context"
 	"log/slog"
+
+	"github.com/powerman/slogx/internal"
 )
 
 const (
-	badKey = "!BADKEY"
 	badCtx = "!BADCTX"
 )
 
@@ -163,7 +164,7 @@ func SetDefaultCtxHandler(ctx context.Context, fallback slog.Handler, opts ...ct
 // ContextWithAttrs applies attrs to a handler stored in ctx.
 func ContextWithAttrs(ctx context.Context, attrs ...any) context.Context {
 	handler := HandlerFromContext(ctx)
-	return NewContextWithHandler(ctx, handler.WithAttrs(argsToAttrSlice(attrs)))
+	return NewContextWithHandler(ctx, handler.WithAttrs(internal.ArgsToAttrSlice(attrs)))
 }
 
 // ContextWithGroup applies group to a handler stored in ctx.

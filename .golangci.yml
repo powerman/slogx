@@ -369,6 +369,7 @@ linters:
         source: '^//go:generate '
     paths:
       - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
+      - internal/ # Code copied from Go sources.
 formatters:
   enable:
     - gci

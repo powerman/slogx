@@ -24,7 +24,7 @@ const attrSep = ' '
 type commonHandler struct {
 	opts              HandlerOptions
 	preformattedAttrs []byte
-	groupPrefix       string   // holds the pre-formatted prefix for groups
+	groupPrefix       []byte   // holds the pre-formatted prefix for groups
 	groups            []string // all groups started from WithGroup
 	mu                *sync.Mutex
 	w                 io.Writer
@@ -35,7 +35,7 @@ func (h *commonHandler) clone() *commonHandler {
 	return &commonHandler{
 		opts:              h.opts,
 		preformattedAttrs: slices.Clip(h.preformattedAttrs),
-		groupPrefix:       h.groupPrefix,
+		groupPrefix:       slices.Clip(h.groupPrefix),
 		groups:            slices.Clip(h.groups),
 		w:                 h.w,
 		mu:                h.mu, // mutex shared among all clones of this handler
@@ -62,7 +62,7 @@ func (h *commonHandler) withAttrs(as []Attr) *commonHandler {
 	// Pre-format the attributes as an optimization.
 	state := h2.newHandleState((*buffer.Buffer)(&h2.preformattedAttrs), false)
 	defer state.free()
-	state.prefix.WriteString(h.groupPrefix)
+	state.prefix.Write(h.groupPrefix)
 	if pfa := h2.preformattedAttrs; len(pfa) > 0 {
 		state.emitSep = true
 	}
@@ -72,8 +72,8 @@ func (h *commonHandler) withAttrs(as []Attr) *commonHandler {
 
 func (h *commonHandler) withGroup(name string) *commonHandler {
 	h2 := h.clone()
-	h2.groupPrefix += name
-	h2.groupPrefix += string(keyComponentSep)
+	h2.groupPrefix = append(h2.groupPrefix, name...)
+	h2.groupPrefix = append(h2.groupPrefix, keyComponentSep)
 	h2.groups = append(h2.groups, name)
 	return h2
 }
@@ -146,7 +146,7 @@ func (s *handleState) appendNonBuiltIns(r Record) {
 	// from WithGroup.
 	// If the record has no Attrs, don't output any groups.
 	if r.NumAttrs() > 0 {
-		s.prefix.WriteString(s.h.groupPrefix)
+		s.prefix.Write(s.h.groupPrefix)
 		r.Attrs(func(a Attr) bool {
 			s.appendAttr(a)
 			return true

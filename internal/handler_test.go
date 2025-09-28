@@ -544,7 +544,7 @@ func TestHandlerEnabled(t *testing.T) {
 		{LevelDebug, true},
 		{levelVar(LevelDebug), true},
 	} {
-		h := &commonHandler{opts: HandlerOptions{Level: test.leveler}}
+		h := NewLayoutHandler(io.Discard, &LayoutHandlerOptions{HandlerOptions{Level: test.leveler}})
 		got := h.enabled(LevelInfo)
 		if got != test.want {
 			t.Errorf("%v: got %t, want %t", test.leveler, got, test.want)

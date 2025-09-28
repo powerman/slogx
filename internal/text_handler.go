@@ -11,7 +11,6 @@ import (
 	"io"
 	"reflect"
 	"strconv"
-	"sync"
 	"unicode"
 	"unicode/utf8"
 )
@@ -19,7 +18,7 @@ import (
 // TextHandler is a [Handler] that writes Records to an [io.Writer] as a
 // sequence of key=value pairs separated by spaces and followed by a newline.
 type TextHandler struct {
-	*commonHandler
+	*LayoutHandler
 }
 
 // NewTextHandler creates a [TextHandler] that writes to w,
@@ -30,28 +29,24 @@ func NewTextHandler(w io.Writer, opts *HandlerOptions) *TextHandler {
 		opts = &HandlerOptions{}
 	}
 	return &TextHandler{
-		&commonHandler{
-			w:    w,
-			opts: *opts,
-			mu:   &sync.Mutex{},
-		},
+		LayoutHandler: NewLayoutHandler(w, &LayoutHandlerOptions{HandlerOptions: *opts}),
 	}
 }
 
 // Enabled reports whether the handler handles records at the given level.
 // The handler ignores records whose level is lower.
 func (h *TextHandler) Enabled(_ context.Context, level Level) bool {
-	return h.commonHandler.enabled(level)
+	return h.LayoutHandler.enabled(level)
 }
 
 // WithAttrs returns a new [TextHandler] whose attributes consists
 // of h's attributes followed by attrs.
 func (h *TextHandler) WithAttrs(attrs []Attr) Handler {
-	return &TextHandler{commonHandler: h.commonHandler.withAttrs(attrs)}
+	return &TextHandler{LayoutHandler: h.LayoutHandler.withAttrs(attrs)}
 }
 
 func (h *TextHandler) WithGroup(name string) Handler {
-	return &TextHandler{commonHandler: h.commonHandler.withGroup(name)}
+	return &TextHandler{LayoutHandler: h.LayoutHandler.withGroup(name)}
 }
 
 // Handle formats its argument [Record] as a single line of space-separated
@@ -89,7 +84,7 @@ func (h *TextHandler) WithGroup(name string) Handler {
 // Each call to Handle results in a single serialized call to
 // io.Writer.Write.
 func (h *TextHandler) Handle(_ context.Context, r Record) error {
-	return h.commonHandler.handle(r)
+	return h.LayoutHandler.handle(r)
 }
 
 func appendTextValue(s *handleState, v Value) error {

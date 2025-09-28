@@ -21,8 +21,12 @@ import (
 // Separator for attrs.
 const attrSep = ' '
 
-type commonHandler struct {
-	opts              HandlerOptions
+type LayoutHandlerOptions struct {
+	HandlerOptions
+}
+
+type LayoutHandler struct {
+	opts              LayoutHandlerOptions
 	preformattedAttrs []byte
 	groups            []string // all groups started from WithGroup
 	prefix            []byte   // key prefix
@@ -30,9 +34,23 @@ type commonHandler struct {
 	w                 io.Writer
 }
 
-func (h *commonHandler) clone() *commonHandler {
+// NewLayoutHandler creates a [LayoutHandler] that writes to w,
+// using the given options.
+// If opts is nil, the default options are used.
+func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
+	if opts == nil {
+		opts = &LayoutHandlerOptions{}
+	}
+	return &LayoutHandler{
+		opts: *opts,
+		mu:   &sync.Mutex{},
+		w:    w,
+	}
+}
+
+func (h *LayoutHandler) clone() *LayoutHandler {
 	// We can't use assignment because we can't copy the mutex.
-	return &commonHandler{
+	return &LayoutHandler{
 		opts:              h.opts,
 		preformattedAttrs: slices.Clip(h.preformattedAttrs),
 		groups:            slices.Clip(h.groups),
@@ -44,7 +62,7 @@ func (h *commonHandler) clone() *commonHandler {
 
 // enabled reports whether l is greater than or equal to the
 // minimum level.
-func (h *commonHandler) enabled(l Level) bool {
+func (h *LayoutHandler) enabled(l Level) bool {
 	minLevel := LevelInfo
 	if h.opts.Level != nil {
 		minLevel = h.opts.Level.Level()
@@ -52,7 +70,7 @@ func (h *commonHandler) enabled(l Level) bool {
 	return l >= minLevel
 }
 
-func (h *commonHandler) withAttrs(as []Attr) *commonHandler {
+func (h *LayoutHandler) withAttrs(as []Attr) *LayoutHandler {
 	// We are going to ignore empty groups, so if the entire slice consists of
 	// them, there is nothing to do.
 	if countEmptyGroups(as) == len(as) {
@@ -70,7 +88,7 @@ func (h *commonHandler) withAttrs(as []Attr) *commonHandler {
 	return h2
 }
 
-func (h *commonHandler) withGroup(name string) *commonHandler {
+func (h *LayoutHandler) withGroup(name string) *LayoutHandler {
 	h2 := h.clone()
 	h2.groups = append(h2.groups, name)
 	h2.prefix = append(h2.prefix, name...)
@@ -80,7 +98,7 @@ func (h *commonHandler) withGroup(name string) *commonHandler {
 
 // handle is the internal implementation of Handler.Handle
 // used by TextHandler and LayoutHandler.
-func (h *commonHandler) handle(r Record) error {
+func (h *LayoutHandler) handle(r Record) error {
 	state := h.newHandleState(buffer.New(), true)
 	defer state.free()
 	// Built-in attributes. They are not in a group.
@@ -156,7 +174,7 @@ func (s *handleState) appendNonBuiltIns(r Record) {
 
 // handleState holds state for a single call to commonHandler.handle.
 type handleState struct {
-	h       *commonHandler
+	h       *LayoutHandler
 	buf     *buffer.Buffer
 	freeBuf bool           // should buf be freed?
 	emitSep bool           // whether to emit a separator before next key
@@ -169,7 +187,7 @@ var groupPool = sync.Pool{New: func() any {
 	return &s
 }}
 
-func (h *commonHandler) newHandleState(buf *buffer.Buffer, freeBuf bool) handleState {
+func (h *LayoutHandler) newHandleState(buf *buffer.Buffer, freeBuf bool) handleState {
 	s := handleState{
 		h:       h,
 		buf:     buf,

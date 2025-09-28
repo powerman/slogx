@@ -29,7 +29,11 @@ func NewTextHandler(w io.Writer, opts *HandlerOptions) *TextHandler {
 		opts = &HandlerOptions{}
 	}
 	return &TextHandler{
-		LayoutHandler: NewLayoutHandler(w, &LayoutHandlerOptions{HandlerOptions: *opts}),
+		LayoutHandler: NewLayoutHandler(w, &LayoutHandlerOptions{
+			AddSource:   opts.AddSource,
+			Level:       opts.Level,
+			ReplaceAttr: opts.ReplaceAttr,
+		}),
 	}
 }
 

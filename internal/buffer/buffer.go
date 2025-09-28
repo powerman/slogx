@@ -5,7 +5,10 @@
 // Package buffer provides a pool-allocated byte buffer.
 package buffer
 
-import "sync"
+import (
+	"slices"
+	"sync"
+)
 
 // Buffer is a byte buffer.
 //
@@ -62,5 +65,8 @@ func (b *Buffer) Len() int {
 }
 
 func (b *Buffer) SetLen(n int) {
+	if n > cap(*b) {
+		*b = slices.Grow(*b, n-len(*b))
+	}
 	*b = (*b)[:n]
 }

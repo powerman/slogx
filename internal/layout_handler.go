@@ -21,8 +21,70 @@ import (
 // Separator for attrs.
 const attrSep = ' '
 
+// AttrFormat specifies how to format an attribute.
+//
+// Value {MaxWidth: -1} results in outputting just the value, without attrSep, key and '='.
+// Zero value results in outputting nothing, same as removing the attr using ReplaceAttr.
+type AttrFormat struct {
+	Prefix     string // Printed instead of attr key.
+	Suffix     string // Printed after the attr value.
+	MinWidth   int    // Minimum width of the attr value.
+	MaxWidth   int    // Maximum width of the attr value. -1 means no limit. 0 means no value.
+	AlignRight bool
+}
+
 type LayoutHandlerOptions struct {
-	HandlerOptions
+	// AddSource causes the handler to compute the source code position
+	// of the log statement and add a SourceKey attribute to the output.
+	AddSource bool
+
+	// Level reports the minimum record level that will be logged.
+	// The handler discards records with lower levels.
+	// If Level is nil, the handler assumes LevelInfo.
+	// The handler calls Level.Level for each record processed;
+	// to adjust the minimum level dynamically, use a LevelVar.
+	Level Leveler
+
+	// ReplaceAttr is called to rewrite each non-group attribute before it is logged.
+	// The attribute's value has been resolved (see [Value.Resolve]).
+	// If ReplaceAttr returns a zero Attr, the attribute is discarded.
+	//
+	// The built-in attributes with keys "time", "level", "source", and "msg"
+	// are passed to this function, except that time is omitted
+	// if zero, and source is omitted if AddSource is false.
+	//
+	// The first argument is a list of currently open groups that contain the
+	// Attr. It must not be retained or modified. ReplaceAttr is never called
+	// for Group attributes, only their contents. For example, the attribute
+	// list
+	//
+	//     Int("a", 1), Group("g", Int("b", 2)), Int("c", 3)
+	//
+	// results in consecutive calls to ReplaceAttr with the following arguments:
+	//
+	//     nil, Int("a", 1)
+	//     []string{"g"}, Int("b", 2)
+	//     nil, Int("c", 3)
+	//
+	// ReplaceAttr can be used to change the default keys of the built-in
+	// attributes, convert types (for example, to replace a `time.Time` with the
+	// integer seconds since the Unix epoch), sanitize personal information, or
+	// remove attributes from the output.
+	ReplaceAttr func(groups []string, a Attr) Attr
+
+	// Format specifies per-attribute formatting options.
+	//
+	// If an attribute's key is present in the map, the corresponding
+	// formatting options are applied when outputting the attribute,
+	// otherwise the attribute is output in the default TextHandler format.
+	//
+	// Key should be the full key, including group prefixes separated by '.'.
+	//
+	// All attributes included in Format are output without attrSep (' '), key and '='.
+	// Include these parts in AttrFormat.Prefix as needed.
+	//
+	// Use zero AttrFormat value for a key to remove the attr from output.
+	Format map[string]AttrFormat
 }
 
 type LayoutHandler struct {
@@ -109,7 +171,7 @@ func (h *LayoutHandler) handle(r Record) error {
 	if !r.Time.IsZero() {
 		key := TimeKey
 		val := r.Time.Round(0) // strip monotonic to match Attr behavior
-		if rep == nil {
+		if _, ok := h.opts.Format[key]; rep == nil && !ok {
 			state.appendKey(key)
 			state.appendTime(val)
 		} else {
@@ -119,7 +181,7 @@ func (h *LayoutHandler) handle(r Record) error {
 	// level
 	key := LevelKey
 	val := r.Level
-	if rep == nil {
+	if _, ok := h.opts.Format[key]; rep == nil && !ok {
 		state.appendKey(key)
 		state.appendString(val.String())
 	} else {
@@ -135,7 +197,7 @@ func (h *LayoutHandler) handle(r Record) error {
 	}
 	key = MessageKey
 	msg := r.Message
-	if rep == nil {
+	if _, ok := h.opts.Format[key]; rep == nil && !ok {
 		state.appendKey(key)
 		state.appendString(msg)
 	} else {
@@ -284,9 +346,55 @@ func (s *handleState) appendAttr(a Attr) {
 			}
 		}
 	} else {
-		s.appendKey(a.Key)
-		s.appendValue(a.Value)
+		key := s.key(a.Key)
+		if format, ok := s.h.opts.Format[key]; ok {
+			s.appendFormat(format, a.Value)
+		} else {
+			s.appendKey(key)
+			s.appendValue(a.Value)
+		}
 	}
+}
+
+func (s *handleState) key(key string) string {
+	if s.prefix != nil && len(*s.prefix) > 0 {
+		return string(*s.prefix) + key
+	}
+	return key
+}
+
+func (s *handleState) appendFormat(format AttrFormat, v Value) {
+	if format.Prefix != "" {
+		s.buf.WriteString(format.Prefix)
+	}
+
+	if format.MaxWidth != 0 {
+		pos := s.buf.Len()
+		s.appendValue(v)
+		n := s.buf.Len() - pos
+		if w := format.MaxWidth; w > 0 && n > w {
+			s.buf.SetLen(pos + w)
+			n = w
+		}
+		if w := format.MinWidth; w > n {
+			pad := w - n
+			s.buf.SetLen(pos + w)
+			padStart := pos + n
+			if format.AlignRight {
+				padStart = pos
+				copy((*s.buf)[pos+pad:], (*s.buf)[pos:pos+n])
+			}
+			for i := range pad {
+				(*s.buf)[padStart+i] = ' '
+			}
+		}
+	}
+
+	if format.Suffix != "" {
+		s.buf.WriteString(format.Suffix)
+	}
+
+	s.emitSep = true
 }
 
 func (s *handleState) appendError(err error) {
@@ -297,26 +405,9 @@ func (s *handleState) appendKey(key string) {
 	if s.emitSep {
 		s.buf.WriteByte(attrSep)
 	}
-	if s.prefix != nil && len(*s.prefix) > 0 {
-		s.appendTwoStrings(string(*s.prefix), key)
-	} else {
-		s.appendString(key)
-	}
+	s.appendString(key)
 	s.buf.WriteByte('=')
 	s.emitSep = true
-}
-
-// appendTwoStrings implements appendString(prefix + key), but faster.
-func (s *handleState) appendTwoStrings(x, y string) {
-	buf := *s.buf
-	switch {
-	case !needsQuoting(x) && !needsQuoting(y):
-		buf.WriteString(x)
-		buf.WriteString(y)
-	default:
-		buf = strconv.AppendQuote(buf, x+y)
-	}
-	*s.buf = buf
 }
 
 func (s *handleState) appendString(str string) {

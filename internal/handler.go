@@ -24,8 +24,8 @@ const attrSep = ' '
 type commonHandler struct {
 	opts              HandlerOptions
 	preformattedAttrs []byte
-	groupPrefix       []byte   // holds the pre-formatted prefix for groups
 	groups            []string // all groups started from WithGroup
+	groupPrefix       []byte   // holds the pre-formatted prefix for groups
 	mu                *sync.Mutex
 	w                 io.Writer
 }
@@ -35,10 +35,10 @@ func (h *commonHandler) clone() *commonHandler {
 	return &commonHandler{
 		opts:              h.opts,
 		preformattedAttrs: slices.Clip(h.preformattedAttrs),
-		groupPrefix:       slices.Clip(h.groupPrefix),
 		groups:            slices.Clip(h.groups),
-		w:                 h.w,
+		groupPrefix:       slices.Clip(h.groupPrefix),
 		mu:                h.mu, // mutex shared among all clones of this handler
+		w:                 h.w,
 	}
 }
 
@@ -72,9 +72,9 @@ func (h *commonHandler) withAttrs(as []Attr) *commonHandler {
 
 func (h *commonHandler) withGroup(name string) *commonHandler {
 	h2 := h.clone()
+	h2.groups = append(h2.groups, name)
 	h2.groupPrefix = append(h2.groupPrefix, name...)
 	h2.groupPrefix = append(h2.groupPrefix, keyComponentSep)
-	h2.groups = append(h2.groups, name)
 	return h2
 }
 

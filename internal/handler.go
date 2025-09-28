@@ -24,14 +24,10 @@ const attrSep = ' '
 type commonHandler struct {
 	opts              HandlerOptions
 	preformattedAttrs []byte
-	// groupPrefix holds the prefix for groups that were already pre-formatted.
-	// A group will appear here when a call to WithGroup is followed by
-	// a call to WithAttrs.
-	groupPrefix string
-	groups      []string // all groups started from WithGroup
-	nOpenGroups int      // the number of groups opened in preformattedAttrs
-	mu          *sync.Mutex
-	w           io.Writer
+	groupPrefix       string   // holds the pre-formatted prefix for groups
+	groups            []string // all groups started from WithGroup
+	mu                *sync.Mutex
+	w                 io.Writer
 }
 
 func (h *commonHandler) clone() *commonHandler {
@@ -41,7 +37,6 @@ func (h *commonHandler) clone() *commonHandler {
 		preformattedAttrs: slices.Clip(h.preformattedAttrs),
 		groupPrefix:       h.groupPrefix,
 		groups:            slices.Clip(h.groups),
-		nOpenGroups:       h.nOpenGroups,
 		w:                 h.w,
 		mu:                h.mu, // mutex shared among all clones of this handler
 	}
@@ -71,18 +66,14 @@ func (h *commonHandler) withAttrs(as []Attr) *commonHandler {
 	if pfa := h2.preformattedAttrs; len(pfa) > 0 {
 		state.emitSep = true
 	}
-	state.openGroups()
 	state.appendAttrs(as)
-	// Remember the new prefix for later keys.
-	h2.groupPrefix = state.prefix.String()
-	// Remember how many opened groups are in preformattedAttrs,
-	// so we don't open them again when we handle a Record.
-	h2.nOpenGroups = len(h2.groups)
 	return h2
 }
 
 func (h *commonHandler) withGroup(name string) *commonHandler {
 	h2 := h.clone()
+	h2.groupPrefix += name
+	h2.groupPrefix += string(keyComponentSep)
 	h2.groups = append(h2.groups, name)
 	return h2
 }
@@ -156,7 +147,6 @@ func (s *handleState) appendNonBuiltIns(r Record) {
 	// If the record has no Attrs, don't output any groups.
 	if r.NumAttrs() > 0 {
 		s.prefix.WriteString(s.h.groupPrefix)
-		s.openGroups()
 		r.Attrs(func(a Attr) bool {
 			s.appendAttr(a)
 			return true
@@ -189,7 +179,7 @@ func (h *commonHandler) newHandleState(buf *buffer.Buffer, freeBuf bool) handleS
 	}
 	if h.opts.ReplaceAttr != nil {
 		s.groups = groupPool.Get().(*[]string)
-		*s.groups = append(*s.groups, h.groups[:h.nOpenGroups]...)
+		*s.groups = append(*s.groups, h.groups...)
 	}
 	return s
 }
@@ -203,12 +193,6 @@ func (s *handleState) free() {
 		groupPool.Put(gs)
 	}
 	s.prefix.Free()
-}
-
-func (s *handleState) openGroups() {
-	for _, n := range s.h.groups[s.h.nOpenGroups:] {
-		s.openGroup(n)
-	}
 }
 
 // Separator for group names and keys.

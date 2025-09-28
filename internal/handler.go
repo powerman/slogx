@@ -1,6 +1,8 @@
 // Copyright 2022 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE-go file.
+//
+// Modified by Alex Efros to remove JSON support and add Layout support.
 
 package internal
 
@@ -16,11 +18,13 @@ import (
 	"github.com/powerman/slogx/internal/buffer"
 )
 
+// Separator for attrs.
+const attrSep = ' '
+
 type commonHandler struct {
 	opts              HandlerOptions
 	preformattedAttrs []byte
-	// groupPrefix is for the text handler only.
-	// It holds the prefix for groups that were already pre-formatted.
+	// groupPrefix holds the prefix for groups that were already pre-formatted.
 	// A group will appear here when a call to WithGroup is followed by
 	// a call to WithAttrs.
 	groupPrefix string
@@ -61,11 +65,11 @@ func (h *commonHandler) withAttrs(as []Attr) *commonHandler {
 	}
 	h2 := h.clone()
 	// Pre-format the attributes as an optimization.
-	state := h2.newHandleState((*buffer.Buffer)(&h2.preformattedAttrs), false, "")
+	state := h2.newHandleState((*buffer.Buffer)(&h2.preformattedAttrs), false)
 	defer state.free()
 	state.prefix.WriteString(h.groupPrefix)
 	if pfa := h2.preformattedAttrs; len(pfa) > 0 {
-		state.sep = h.attrSep()
+		state.emitSep = true
 	}
 	// Remember the position in the buffer, in case all attrs are empty.
 	pos := state.buf.Len()
@@ -89,9 +93,9 @@ func (h *commonHandler) withGroup(name string) *commonHandler {
 }
 
 // handle is the internal implementation of Handler.Handle
-// used by TextHandler and JSONHandler.
+// used by TextHandler and LayoutHandler.
 func (h *commonHandler) handle(r Record) error {
-	state := h.newHandleState(buffer.New(), true, "")
+	state := h.newHandleState(buffer.New(), true)
 	defer state.free()
 	// Built-in attributes. They are not in a group.
 	stateGroups := state.groups
@@ -146,9 +150,11 @@ func (h *commonHandler) handle(r Record) error {
 func (s *handleState) appendNonBuiltIns(r Record) {
 	// preformatted Attrs
 	if pfa := s.h.preformattedAttrs; len(pfa) > 0 {
-		s.buf.WriteString(s.sep)
+		if s.emitSep {
+			s.buf.WriteByte(attrSep)
+		}
 		s.buf.Write(pfa)
-		s.sep = s.h.attrSep()
+		s.emitSep = true
 	}
 	// Attrs in Record -- unlike the built-in ones, they are in groups started
 	// from WithGroup.
@@ -174,20 +180,13 @@ func (s *handleState) appendNonBuiltIns(r Record) {
 	}
 }
 
-// attrSep returns the separator between attributes.
-func (h *commonHandler) attrSep() string {
-	return " "
-}
-
 // handleState holds state for a single call to commonHandler.handle.
-// The initial value of sep determines whether to emit a separator
-// before the next key, after which it stays true.
 type handleState struct {
 	h       *commonHandler
 	buf     *buffer.Buffer
 	freeBuf bool           // should buf be freed?
-	sep     string         // separator to write before next key
-	prefix  *buffer.Buffer // for text: key prefix
+	emitSep bool           // whether to emit a separator before next key
+	prefix  *buffer.Buffer // key prefix
 	groups  *[]string      // pool-allocated slice of active groups, for ReplaceAttr
 }
 
@@ -196,12 +195,12 @@ var groupPool = sync.Pool{New: func() any {
 	return &s
 }}
 
-func (h *commonHandler) newHandleState(buf *buffer.Buffer, freeBuf bool, sep string) handleState {
+func (h *commonHandler) newHandleState(buf *buffer.Buffer, freeBuf bool) handleState {
 	s := handleState{
 		h:       h,
 		buf:     buf,
 		freeBuf: freeBuf,
-		sep:     sep,
+		emitSep: false,
 		prefix:  buffer.New(),
 	}
 	if h.opts.ReplaceAttr != nil {
@@ -245,7 +244,6 @@ func (s *handleState) openGroup(name string) {
 // closeGroup ends the group with the given name.
 func (s *handleState) closeGroup(name string) {
 	(*s.prefix) = (*s.prefix)[:len(*s.prefix)-len(name)-1 /* for keyComponentSep */]
-	s.sep = s.h.attrSep()
 	if s.groups != nil {
 		*s.groups = (*s.groups)[:len(*s.groups)-1]
 	}
@@ -324,14 +322,16 @@ func (s *handleState) appendError(err error) {
 }
 
 func (s *handleState) appendKey(key string) {
-	s.buf.WriteString(s.sep)
+	if s.emitSep {
+		s.buf.WriteByte(attrSep)
+	}
 	if s.prefix != nil && len(*s.prefix) > 0 {
 		s.appendTwoStrings(string(*s.prefix), key)
 	} else {
 		s.appendString(key)
 	}
 	s.buf.WriteByte('=')
-	s.sep = s.h.attrSep()
+	s.emitSep = true
 }
 
 // appendTwoStrings implements appendString(prefix + key), but faster.

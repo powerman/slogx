@@ -545,7 +545,7 @@ func TestHandlerEnabled(t *testing.T) {
 		{levelVar(LevelDebug), true},
 	} {
 		h := NewLayoutHandler(io.Discard, &LayoutHandlerOptions{Level: test.leveler})
-		got := h.enabled(LevelInfo)
+		got := h.Enabled(nil, LevelInfo)
 		if got != test.want {
 			t.Errorf("%v: got %t, want %t", test.leveler, got, test.want)
 		}
@@ -686,7 +686,7 @@ func BenchmarkAppendKey(b *testing.B) {
 		for _, quoting := range []string{"no_quoting", "pre_quoting", "key_quoting", "both_quoting"} {
 			b.Run(fmt.Sprintf("%s_prefix_size_%d", quoting, size), func(b *testing.B) {
 				var (
-					hs     = NewTextHandler(io.Discard, nil).newHandleState(buffer.New(), false)
+					hs     = NewTextHandler(io.Discard, nil).next.(*LayoutHandler).newHandleState(buffer.New(), false)
 					prefix = bytes.Repeat([]byte("x"), size)
 					key    = "key"
 				)

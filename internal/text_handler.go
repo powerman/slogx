@@ -18,7 +18,7 @@ import (
 // TextHandler is a [Handler] that writes Records to an [io.Writer] as a
 // sequence of key=value pairs separated by spaces and followed by a newline.
 type TextHandler struct {
-	*LayoutHandler
+	next Handler
 }
 
 // NewTextHandler creates a [TextHandler] that writes to w,
@@ -29,7 +29,7 @@ func NewTextHandler(w io.Writer, opts *HandlerOptions) *TextHandler {
 		opts = &HandlerOptions{}
 	}
 	return &TextHandler{
-		LayoutHandler: NewLayoutHandler(w, &LayoutHandlerOptions{
+		next: NewLayoutHandler(w, &LayoutHandlerOptions{
 			AddSource:   opts.AddSource,
 			Level:       opts.Level,
 			ReplaceAttr: opts.ReplaceAttr,
@@ -39,18 +39,18 @@ func NewTextHandler(w io.Writer, opts *HandlerOptions) *TextHandler {
 
 // Enabled reports whether the handler handles records at the given level.
 // The handler ignores records whose level is lower.
-func (h *TextHandler) Enabled(_ context.Context, level Level) bool {
-	return h.LayoutHandler.enabled(level)
+func (h *TextHandler) Enabled(ctx context.Context, level Level) bool {
+	return h.next.Enabled(ctx, level)
 }
 
 // WithAttrs returns a new [TextHandler] whose attributes consists
 // of h's attributes followed by attrs.
 func (h *TextHandler) WithAttrs(attrs []Attr) Handler {
-	return &TextHandler{LayoutHandler: h.LayoutHandler.withAttrs(attrs)}
+	return &TextHandler{next: h.next.WithAttrs(attrs)}
 }
 
 func (h *TextHandler) WithGroup(name string) Handler {
-	return &TextHandler{LayoutHandler: h.LayoutHandler.withGroup(name)}
+	return &TextHandler{next: h.next.WithGroup(name)}
 }
 
 // Handle formats its argument [Record] as a single line of space-separated
@@ -87,8 +87,8 @@ func (h *TextHandler) WithGroup(name string) Handler {
 //
 // Each call to Handle results in a single serialized call to
 // io.Writer.Write.
-func (h *TextHandler) Handle(_ context.Context, r Record) error {
-	return h.LayoutHandler.handle(r)
+func (h *TextHandler) Handle(ctx context.Context, r Record) error {
+	return h.next.Handle(ctx, r)
 }
 
 func appendTextValue(s *handleState, v Value) error {

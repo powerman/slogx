@@ -7,6 +7,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"reflect"
@@ -122,9 +123,9 @@ func (h *LayoutHandler) clone() *LayoutHandler {
 	}
 }
 
-// enabled reports whether l is greater than or equal to the
+// Enabled reports whether l is greater than or equal to the
 // minimum level.
-func (h *LayoutHandler) enabled(l Level) bool {
+func (h *LayoutHandler) Enabled(_ context.Context, l Level) bool {
 	minLevel := LevelInfo
 	if h.opts.Level != nil {
 		minLevel = h.opts.Level.Level()
@@ -132,7 +133,7 @@ func (h *LayoutHandler) enabled(l Level) bool {
 	return l >= minLevel
 }
 
-func (h *LayoutHandler) withAttrs(as []Attr) *LayoutHandler {
+func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 	// We are going to ignore empty groups, so if the entire slice consists of
 	// them, there is nothing to do.
 	if countEmptyGroups(as) == len(as) {
@@ -150,7 +151,7 @@ func (h *LayoutHandler) withAttrs(as []Attr) *LayoutHandler {
 	return h2
 }
 
-func (h *LayoutHandler) withGroup(name string) *LayoutHandler {
+func (h *LayoutHandler) WithGroup(name string) Handler {
 	h2 := h.clone()
 	h2.groups = append(h2.groups, name)
 	h2.prefix = append(h2.prefix, name...)
@@ -158,9 +159,9 @@ func (h *LayoutHandler) withGroup(name string) *LayoutHandler {
 	return h2
 }
 
-// handle is the internal implementation of Handler.Handle
+// Handle is the internal implementation of Handler.Handle
 // used by TextHandler and LayoutHandler.
-func (h *LayoutHandler) handle(r Record) error {
+func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	state := h.newHandleState(buffer.New(), true)
 	defer state.free()
 	// Built-in attributes. They are not in a group.

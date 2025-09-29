@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -86,10 +87,38 @@ type LayoutHandlerOptions struct {
 	//
 	// Use zero AttrFormat value for a key to remove the attr from output.
 	Format map[string]AttrFormat
+
+	// PrefixKeys specifies keys that, if present, output just before the message key,
+	// in order given by the slice.
+	// Key should be the full key, including group prefixes separated by '.'.
+	//
+	// If multiple attributes have the same key only the last one is output.
+	// If slog.MessageKey is present in PrefixKeys, it is ignored.
+	// If same key is present multiple times in PrefixKeys, all but the first are ignored.
+	// If same key is present in both PrefixKeys and SuffixKeys, it is output as a prefix.
+	//
+	// Keys not present in PrefixKeys and SuffixKeys are output as usual,
+	// between the message and the suffix keys, in order they were added.
+	PrefixKeys []string
+
+	// SuffixKeys specifies keys that, if present, output after all other attributes,
+	// in order given by the slice.
+	// Key should be the full key, including group prefixes separated by '.'.
+	//
+	// If multiple attributes have the same key only the last one is output.
+	// If slog.MessageKey is present in SuffixKeys, it is ignored.
+	// If same key is present multiple times in SuffixKeys, all but the first are ignored.
+	// If same key is present in both PrefixKeys and SuffixKeys, it is output as a prefix.
+	//
+	// Keys not present in PrefixKeys and SuffixKeys are output as usual,
+	// between the message and the suffix keys, in order they were added.
+	SuffixKeys []string
 }
 
 type LayoutHandler struct {
 	opts              LayoutHandlerOptions
+	prefixAttr        map[string]*[]byte // key -> preformatted Attr
+	suffixAttr        map[string]*[]byte // key -> preformatted Attr
 	preformattedAttrs []byte
 	groups            []string // all groups started from WithGroup
 	prefix            []byte   // key prefix
@@ -104,10 +133,35 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	if opts == nil {
 		opts = &LayoutHandlerOptions{}
 	}
+
+	// Remove duplicate keys in PrefixKeys and SuffixKeys,
+	// keeping the first occurrence of each key.
+	// If a key is present in both, it is kept in PrefixKeys.
+	prefixKeys := make([]string, 0, len(opts.PrefixKeys))
+	suffixKeys := make([]string, 0, len(opts.SuffixKeys))
+	seen := make(map[string]bool, len(opts.PrefixKeys)+len(opts.SuffixKeys)+1 /* for MessageKey */)
+	seen[MessageKey] = true // Ignore MessageKey in both.
+	for _, k := range opts.PrefixKeys {
+		if !seen[k] {
+			seen[k] = true
+			prefixKeys = append(prefixKeys, k)
+		}
+	}
+	for _, k := range opts.SuffixKeys {
+		if !seen[k] {
+			seen[k] = true
+			suffixKeys = append(suffixKeys, k)
+		}
+	}
+	opts.PrefixKeys = prefixKeys
+	opts.SuffixKeys = suffixKeys
+
 	return &LayoutHandler{
-		opts: *opts,
-		mu:   &sync.Mutex{},
-		w:    w,
+		opts:       *opts,
+		prefixAttr: make(map[string]*[]byte, len(opts.PrefixKeys)),
+		suffixAttr: make(map[string]*[]byte, len(opts.SuffixKeys)),
+		mu:         &sync.Mutex{},
+		w:          w,
 	}
 }
 
@@ -115,6 +169,8 @@ func (h *LayoutHandler) clone() *LayoutHandler {
 	// We can't use assignment because we can't copy the mutex.
 	return &LayoutHandler{
 		opts:              h.opts,
+		prefixAttr:        maps.Clone(h.prefixAttr),
+		suffixAttr:        maps.Clone(h.suffixAttr),
 		preformattedAttrs: slices.Clip(h.preformattedAttrs),
 		groups:            slices.Clip(h.groups),
 		prefix:            slices.Clip(h.prefix),
@@ -198,19 +254,59 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	}
 	key = MessageKey
 	msg := r.Message
-	if _, ok := h.opts.Format[key]; rep == nil && !ok {
+	messagePos := state.buf.Len()
+	_, messageHasFormat := h.opts.Format[key]
+	messageEmitSep := state.emitSep && !messageHasFormat
+	if rep == nil && !messageHasFormat {
 		state.appendKey(key)
 		state.appendString(msg)
 	} else {
 		state.appendAttr(String(key, msg))
 	}
+	messageEmitSep = messageEmitSep && state.buf.Len() > messagePos
+
 	state.groups = stateGroups // Restore groups passed to ReplaceAttrs.
 	state.appendNonBuiltIns(r)
-	state.buf.WriteByte('\n')
+
+	buf := state.buf
+	if len(h.prefixAttr) > 0 {
+		buf = buffer.New()
+		defer buf.Free()
+		// Insert prefix attrs before the message.
+		buf.Write((*state.buf)[:messagePos])
+		for _, k := range h.opts.PrefixKeys {
+			if pa := h.prefixAttr[k]; pa != nil && len(*pa) > 0 {
+				if _, ok := h.opts.Format[k]; buf.Len() > 0 && !ok {
+					buf.WriteByte(attrSep)
+				}
+				buf.Write(*pa)
+			}
+		}
+		// Write the message and the rest of non-suffix attrs.
+		switch {
+		case buf.Len() == 0 && messageEmitSep:
+			messagePos++ // skip leading separator
+		case buf.Len() > 0 && !messageEmitSep:
+			buf.WriteByte(attrSep)
+		}
+		buf.Write((*state.buf)[messagePos:])
+	}
+	if len(h.suffixAttr) > 0 {
+		// Append suffix attrs after all other attrs.
+		for _, k := range h.opts.SuffixKeys {
+			if pa := h.suffixAttr[k]; pa != nil && len(*pa) > 0 {
+				if _, ok := h.opts.Format[k]; buf.Len() > 0 && !ok {
+					buf.WriteByte(attrSep)
+				}
+				buf.Write(*pa)
+			}
+		}
+	}
+	buf.WriteByte('\n')
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	_, err := h.w.Write(*state.buf)
+	_, err := h.w.Write(*buf)
 	return err
 }
 
@@ -348,11 +444,44 @@ func (s *handleState) appendAttr(a Attr) {
 		}
 	} else {
 		key := s.key(a.Key)
+
+		// Redirect output to prefixAttr[key] or suffixAttr[key] if needed.
+		// Keep the original emitSep state when output is redirected.
+		var bufp *[]byte
+		if slices.Contains(s.h.opts.PrefixKeys, key) {
+			bufp = s.h.prefixAttr[key]
+			if bufp == nil {
+				buf := make([]byte, 0, 64)
+				bufp = &buf
+				s.h.prefixAttr[key] = bufp
+			}
+		} else if slices.Contains(s.h.opts.SuffixKeys, key) {
+			bufp = s.h.suffixAttr[key]
+			if bufp == nil {
+				buf := make([]byte, 0, 64)
+				bufp = &buf
+				s.h.suffixAttr[key] = bufp
+			}
+		}
+
+		origBuf := s.buf
+		origEmitSep := s.emitSep
+		if bufp != nil {
+			*bufp = (*bufp)[:0]
+			s.buf = (*buffer.Buffer)(bufp)
+			s.emitSep = false
+		}
+
 		if format, ok := s.h.opts.Format[key]; ok {
 			s.appendFormat(format, a.Value)
 		} else {
 			s.appendKey(key)
 			s.appendValue(a.Value)
+		}
+
+		if bufp != nil {
+			s.buf = origBuf
+			s.emitSep = origEmitSep
 		}
 	}
 }

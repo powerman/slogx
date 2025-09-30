@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"maps"
 	"reflect"
 	"slices"
 	"strconv"
@@ -115,10 +114,47 @@ type LayoutHandlerOptions struct {
 	SuffixKeys []string
 }
 
+type layoutAttrs struct {
+	keys []string // opts.{Prefix,Suffix}Keys
+	attr [][]byte // index from keys -> subslice of buf, len(attr)==len(keys)
+	buf  []byte   // preformatted attrs (without attrSep)
+}
+
+func newLayoutAttrs(keys []string) *layoutAttrs {
+	return &layoutAttrs{
+		keys: keys,
+		attr: make([][]byte, len(keys)),
+	}
+}
+
+func (la *layoutAttrs) clone() *layoutAttrs {
+	return &layoutAttrs{
+		keys: la.keys,
+		attr: slices.Clone(la.attr),
+		buf:  slices.Clip(la.buf),
+	}
+}
+
+func (la *layoutAttrs) pos() int {
+	return len(la.buf)
+}
+
+func (la *layoutAttrs) buffer() *buffer.Buffer {
+	return (*buffer.Buffer)(&la.buf)
+}
+
+func (la *layoutAttrs) index(key string) int {
+	return slices.Index(la.keys, key)
+}
+
+func (la *layoutAttrs) set(index int, start int) {
+	la.attr[index] = la.buf[start:]
+}
+
 type LayoutHandler struct {
 	opts              LayoutHandlerOptions
-	prefixAttr        map[string]*[]byte // key -> preformatted Attr
-	suffixAttr        map[string]*[]byte // key -> preformatted Attr
+	prefixAttrs       *layoutAttrs // preformatted prefix attrs
+	suffixAttrs       *layoutAttrs // preformatted suffix attrs
 	preformattedAttrs []byte
 	groups            []string // all groups started from WithGroup
 	prefix            []byte   // key prefix
@@ -157,11 +193,11 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	opts.SuffixKeys = suffixKeys
 
 	return &LayoutHandler{
-		opts:       *opts,
-		prefixAttr: make(map[string]*[]byte, len(opts.PrefixKeys)),
-		suffixAttr: make(map[string]*[]byte, len(opts.SuffixKeys)),
-		mu:         &sync.Mutex{},
-		w:          w,
+		opts:        *opts,
+		prefixAttrs: newLayoutAttrs(opts.PrefixKeys),
+		suffixAttrs: newLayoutAttrs(opts.SuffixKeys),
+		mu:          &sync.Mutex{},
+		w:           w,
 	}
 }
 
@@ -169,8 +205,8 @@ func (h *LayoutHandler) clone() *LayoutHandler {
 	// We can't use assignment because we can't copy the mutex.
 	return &LayoutHandler{
 		opts:              h.opts,
-		prefixAttr:        maps.Clone(h.prefixAttr),
-		suffixAttr:        maps.Clone(h.suffixAttr),
+		prefixAttrs:       h.prefixAttrs.clone(),
+		suffixAttrs:       h.suffixAttrs.clone(),
 		preformattedAttrs: slices.Clip(h.preformattedAttrs),
 		groups:            slices.Clip(h.groups),
 		prefix:            slices.Clip(h.prefix),
@@ -197,7 +233,9 @@ func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 	}
 	h2 := h.clone()
 	// Pre-format the attributes as an optimization.
-	state := h2.newHandleState((*buffer.Buffer)(&h2.preformattedAttrs), false)
+	state := h2.newHandleState(
+		h2.prefixAttrs, h2.suffixAttrs,
+		(*buffer.Buffer)(&h2.preformattedAttrs), false)
 	defer state.free()
 	state.prefix.Write(h.prefix)
 	if pfa := h2.preformattedAttrs; len(pfa) > 0 {
@@ -218,7 +256,9 @@ func (h *LayoutHandler) WithGroup(name string) Handler {
 // Handle is the internal implementation of Handler.Handle
 // used by TextHandler and LayoutHandler.
 func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
-	state := h.newHandleState(buffer.New(), true)
+	prefixAttrs := h.prefixAttrs.clone()
+	suffixAttrs := h.suffixAttrs.clone()
+	state := h.newHandleState(prefixAttrs, suffixAttrs, buffer.New(), true)
 	defer state.free()
 	// Built-in attributes. They are not in a group.
 	stateGroups := state.groups
@@ -269,17 +309,18 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	state.appendNonBuiltIns(r)
 
 	buf := state.buf
-	if len(h.prefixAttr) > 0 {
+	if prefixAttrs.pos() > 0 {
 		buf = buffer.New()
 		defer buf.Free()
 		// Insert prefix attrs before the message.
 		buf.Write((*state.buf)[:messagePos])
-		for _, k := range h.opts.PrefixKeys {
-			if pa := h.prefixAttr[k]; pa != nil && len(*pa) > 0 {
+		for i, a := range prefixAttrs.attr {
+			if len(a) > 0 {
+				k := prefixAttrs.keys[i]
 				if _, ok := h.opts.Format[k]; buf.Len() > 0 && !ok {
 					buf.WriteByte(attrSep)
 				}
-				buf.Write(*pa)
+				buf.Write(a)
 			}
 		}
 		// Write the message and the rest of non-suffix attrs.
@@ -291,14 +332,15 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 		}
 		buf.Write((*state.buf)[messagePos:])
 	}
-	if len(h.suffixAttr) > 0 {
+	if suffixAttrs.pos() > 0 {
 		// Append suffix attrs after all other attrs.
-		for _, k := range h.opts.SuffixKeys {
-			if pa := h.suffixAttr[k]; pa != nil && len(*pa) > 0 {
+		for i, a := range suffixAttrs.attr {
+			if len(a) > 0 {
+				k := suffixAttrs.keys[i]
 				if _, ok := h.opts.Format[k]; buf.Len() > 0 && !ok {
 					buf.WriteByte(attrSep)
 				}
-				buf.Write(*pa)
+				buf.Write(a)
 			}
 		}
 	}
@@ -333,12 +375,14 @@ func (s *handleState) appendNonBuiltIns(r Record) {
 
 // handleState holds state for a single call to commonHandler.handle.
 type handleState struct {
-	h       *LayoutHandler
-	buf     *buffer.Buffer
-	freeBuf bool           // should buf be freed?
-	emitSep bool           // whether to emit a separator before next key
-	prefix  *buffer.Buffer // key prefix
-	groups  *[]string      // pool-allocated slice of active groups, for ReplaceAttr
+	h           *LayoutHandler
+	prefixAttrs *layoutAttrs
+	suffixAttrs *layoutAttrs
+	buf         *buffer.Buffer
+	freeBuf     bool           // should buf be freed?
+	emitSep     bool           // whether to emit a separator before next key
+	prefix      *buffer.Buffer // key prefix
+	groups      *[]string      // pool-allocated slice of active groups, for ReplaceAttr
 }
 
 var groupPool = sync.Pool{New: func() any {
@@ -346,13 +390,18 @@ var groupPool = sync.Pool{New: func() any {
 	return &s
 }}
 
-func (h *LayoutHandler) newHandleState(buf *buffer.Buffer, freeBuf bool) handleState {
+func (h *LayoutHandler) newHandleState(
+	prefixAttrs *layoutAttrs, suffixAttrs *layoutAttrs,
+	buf *buffer.Buffer, freeBuf bool,
+) handleState {
 	s := handleState{
-		h:       h,
-		buf:     buf,
-		freeBuf: freeBuf,
-		emitSep: false,
-		prefix:  buffer.New(),
+		h:           h,
+		prefixAttrs: prefixAttrs,
+		suffixAttrs: suffixAttrs,
+		buf:         buf,
+		freeBuf:     freeBuf,
+		emitSep:     false,
+		prefix:      buffer.New(),
 	}
 	if h.opts.ReplaceAttr != nil {
 		s.groups = groupPool.Get().(*[]string)
@@ -445,30 +494,22 @@ func (s *handleState) appendAttr(a Attr) {
 	} else {
 		key := s.key(a.Key)
 
-		// Redirect output to prefixAttr[key] or suffixAttr[key] if needed.
+		// Redirect output to prefixAttrs.buf or suffixAttrs.buf if needed.
 		// Keep the original emitSep state when output is redirected.
-		var bufp *[]byte
-		if slices.Contains(s.h.opts.PrefixKeys, key) {
-			bufp = s.h.prefixAttr[key]
-			if bufp == nil {
-				buf := make([]byte, 0, 64)
-				bufp = &buf
-				s.h.prefixAttr[key] = bufp
-			}
-		} else if slices.Contains(s.h.opts.SuffixKeys, key) {
-			bufp = s.h.suffixAttr[key]
-			if bufp == nil {
-				buf := make([]byte, 0, 64)
-				bufp = &buf
-				s.h.suffixAttr[key] = bufp
-			}
+		var layout *layoutAttrs
+		var layoutIndex int
+		if layoutIndex = s.prefixAttrs.index(key); layoutIndex >= 0 {
+			layout = s.prefixAttrs
+		} else if layoutIndex = s.suffixAttrs.index(key); layoutIndex >= 0 {
+			layout = s.suffixAttrs
 		}
 
 		origBuf := s.buf
 		origEmitSep := s.emitSep
-		if bufp != nil {
-			*bufp = (*bufp)[:0]
-			s.buf = (*buffer.Buffer)(bufp)
+		var layoutPos int
+		if layout != nil {
+			layoutPos = layout.pos()
+			s.buf = layout.buffer()
 			s.emitSep = false
 		}
 
@@ -479,7 +520,8 @@ func (s *handleState) appendAttr(a Attr) {
 			s.appendValue(a.Value)
 		}
 
-		if bufp != nil {
+		if layout != nil {
+			layout.set(layoutIndex, layoutPos)
 			s.buf = origBuf
 			s.emitSep = origEmitSep
 		}

@@ -300,14 +300,18 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	msg := r.Message
 	messagePos := state.buf.Len()
 	_, messageHasFormat := h.opts.Format[key]
-	messageEmitSep := state.emitSep && !messageHasFormat
+	messageEmitSep := state.emitSep
+	messagePresent := true
 	if rep == nil && !messageHasFormat {
 		state.appendKey(key)
 		state.appendString(msg)
 	} else {
 		state.appendAttr(String(key, msg))
+		if state.buf.Len() == messagePos {
+			// Message was removed by ReplaceAttr or Format with zero AttrFormat.
+			messagePresent = false
+		}
 	}
-	messageEmitSep = messageEmitSep && state.buf.Len() > messagePos
 
 	state.groups = stateGroups // Restore groups passed to ReplaceAttrs.
 	state.appendNonBuiltIns(r)
@@ -330,11 +334,13 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 			}
 		}
 		// Write the message and the rest of non-suffix attrs.
-		switch {
-		case buf.Len() == 0 && messageEmitSep:
-			messagePos++ // skip leading separator
-		case buf.Len() > 0 && !messageEmitSep:
-			buf.WriteByte(attrSep)
+		if messagePresent && !messageHasFormat {
+			switch {
+			case buf.Len() == 0 && messageEmitSep:
+				messagePos++ // skip leading separator
+			case buf.Len() > 0 && !messageEmitSep:
+				buf.WriteByte(attrSep)
+			}
 		}
 		buf.Write((*state.buf)[messagePos:])
 	}

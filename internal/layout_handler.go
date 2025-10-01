@@ -577,12 +577,14 @@ func (s *handleState) appendFormat(format AttrFormat, v Value) {
 		if w := format.MaxWidth; w > 0 && n > w {
 			s.buf.SetLen(cutPos)
 			switch {
-			case w == 2 && quoted:
-				s.buf.WriteString(`……`)
-			case quoted:
-				s.buf.WriteString(`…"`)
-			default:
+			case !quoted:
 				s.buf.WriteString(`…`)
+			case w == 1:
+				s.buf.WriteString(`…`)
+			case w == 2:
+				s.buf.WriteString(`……`)
+			default:
+				s.buf.WriteString(`…"`)
 			}
 			n = w
 		}

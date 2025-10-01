@@ -114,8 +114,8 @@ outputs = ['{{vars.cover}}']
 run = '''
 gotestsum -- \
     -coverpkg="$(go list ./... | paste -s -d,)" \
-    -coverprofile {{vars.cover}} \
-    ./...
+    -coverprofile {{vars.cover}}.tmp \
+    ./... && mv {{vars.cover}}.tmp {{vars.cover}}
 '''
 
 [tasks.cachedir]

@@ -594,7 +594,7 @@ func (s *handleState) appendFormat(format AttrFormat, v Value) {
 			s.buf.SetLen(padStart + pad)
 			if format.AlignRight {
 				padStart = pos
-				copy((*s.buf)[pos+pad:], (*s.buf)[pos:pos+n])
+				copy((*s.buf)[pos+pad:], (*s.buf)[pos:])
 			}
 			for i := range pad {
 				(*s.buf)[padStart+i] = ' '

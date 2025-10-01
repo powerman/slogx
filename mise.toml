@@ -29,6 +29,7 @@ gh = 'latest'
 
 [vars]
 cover = '.cache/cover.out'
+cover_tmpdir = '{{ env.TMPDIR | default(value="") }}' # Overwrite in mise.local.toml if needed.
 
 
 [tasks.'changelog:skip-commit']
@@ -102,6 +103,7 @@ run = 'go tool cover -func={{vars.cover}} | tail -n 1 | xargs echo'
 [tasks.'cover:go:browse']
 description = 'Show Go test coverage in a browser'
 depends = 'cover:go:generate'
+env.TMPDIR = '{{vars.cover_tmpdir}}'
 run = 'go tool cover -html={{vars.cover}}'
 
 [tasks.'cover:go:generate']

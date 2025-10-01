@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/powerman/slogx/internal/buffer"
 )
@@ -549,15 +550,43 @@ func (s *handleState) appendFormat(format AttrFormat, v Value) {
 	if format.MaxWidth != 0 {
 		pos := s.buf.Len()
 		s.appendValue(v)
-		n := s.buf.Len() - pos
+		// Count runes in the appended value up to max amount needed for next checks.
+		n := 0
+		// Detect quoted values to close the quote after truncation.
+		quoted := pos < s.buf.Len() && (*s.buf)[pos] == '"'
+		// Position after value's last rune that fits into MaxWidth (when enforced).
+		// The last rune is MaxWidth-1 for unquoted values and MaxWidth-2 for quoted.
+		cutPos := pos // Valid for MaxWidth=1 and quoted MaxWidth=2.
+		if nMax := max(format.MinWidth, format.MaxWidth); nMax > 0 {
+			for i := pos; i < s.buf.Len() && n <= nMax; {
+				_, size := utf8.DecodeRune((*s.buf)[i:])
+				i += size
+				n++
+				// Update cutPos for unquoted MaxWidth>=2 and quoted MaxWidth>2.
+				switch {
+				case format.MaxWidth >= 2 && !quoted && n == format.MaxWidth-1:
+					cutPos = i
+				case format.MaxWidth > 2 && quoted && n == format.MaxWidth-2:
+					cutPos = i
+				}
+			}
+		}
 		if w := format.MaxWidth; w > 0 && n > w {
-			s.buf.SetLen(pos + w)
+			s.buf.SetLen(cutPos)
+			switch {
+			case w == 2 && quoted:
+				s.buf.WriteString(`……`)
+			case quoted:
+				s.buf.WriteString(`…"`)
+			default:
+				s.buf.WriteString(`…`)
+			}
 			n = w
 		}
 		if w := format.MinWidth; w > n {
 			pad := w - n
-			s.buf.SetLen(pos + w)
-			padStart := pos + n
+			padStart := s.buf.Len()
+			s.buf.SetLen(padStart + pad)
 			if format.AlignRight {
 				padStart = pos
 				copy((*s.buf)[pos+pad:], (*s.buf)[pos:pos+n])

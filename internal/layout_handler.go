@@ -2,7 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE-go file.
 //
-// Modified by Alex Efros to remove JSON support and add Layout support.
+// Based on handler.go:
+// - Type commonHandler renamed to LayoutHandler.
+// - Removed JSON support.
+// - Added Layout support.
 
 package internal
 

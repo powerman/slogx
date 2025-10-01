@@ -606,7 +606,9 @@ func (s *handleState) appendFormat(format AttrFormat, v Value) {
 		s.buf.WriteString(format.Suffix)
 	}
 
-	s.emitSep = true
+	if format.Prefix != "" || format.MaxWidth != 0 || format.Suffix != "" {
+		s.emitSep = true
+	}
 }
 
 func (s *handleState) appendError(err error) {

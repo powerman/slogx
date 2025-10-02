@@ -261,6 +261,9 @@ func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 }
 
 func (h *LayoutHandler) WithGroup(name string) Handler {
+	if name == "" {
+		return h
+	}
 	h2 := h.clone()
 	h2.groups = append(h2.groups, name)
 	h2.prefix = append(h2.prefix, name...)

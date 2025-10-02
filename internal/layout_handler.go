@@ -155,15 +155,24 @@ func (la layoutAttrs) set(index int, start int) {
 	la.attr[index] = la.buf[start:]
 }
 
+type startSepState int
+
+const (
+	sepNone     startSepState = iota // no attrs yet
+	sepSkipped                       // first attr has no Format (output without required attrSep)
+	sepIncluded                      // first attr has Format (does not need attrSep)
+)
+
 type LayoutHandler struct {
-	opts              LayoutHandlerOptions
-	prefixAttrs       layoutAttrs // preformatted prefix attrs
-	suffixAttrs       layoutAttrs // preformatted suffix attrs
-	preformattedAttrs []byte
-	groups            []string // all groups started from WithGroup
-	prefix            []byte   // key prefix
-	mu                *sync.Mutex
-	w                 io.Writer
+	opts                   LayoutHandlerOptions
+	prefixAttrs            layoutAttrs // preformatted prefix attrs
+	suffixAttrs            layoutAttrs // preformatted suffix attrs
+	preformattedAttrs      []byte
+	preformattedAttrsStart startSepState
+	groups                 []string // all groups started from WithGroup
+	prefix                 []byte   // key prefix
+	mu                     *sync.Mutex
+	w                      io.Writer
 }
 
 // NewLayoutHandler creates a [LayoutHandler] that writes to w,
@@ -208,14 +217,15 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 func (h *LayoutHandler) clone() *LayoutHandler {
 	// We can't use assignment because we can't copy the mutex.
 	return &LayoutHandler{
-		opts:              h.opts,
-		prefixAttrs:       h.prefixAttrs.clone(),
-		suffixAttrs:       h.suffixAttrs.clone(),
-		preformattedAttrs: slices.Clip(h.preformattedAttrs),
-		groups:            slices.Clip(h.groups),
-		prefix:            slices.Clip(h.prefix),
-		mu:                h.mu, // mutex shared among all clones of this handler
-		w:                 h.w,
+		opts:                   h.opts,
+		prefixAttrs:            h.prefixAttrs.clone(),
+		suffixAttrs:            h.suffixAttrs.clone(),
+		preformattedAttrs:      slices.Clip(h.preformattedAttrs),
+		preformattedAttrsStart: h.preformattedAttrsStart,
+		groups:                 slices.Clip(h.groups),
+		prefix:                 slices.Clip(h.prefix),
+		mu:                     h.mu, // mutex shared among all clones of this handler
+		w:                      h.w,
 	}
 }
 
@@ -241,13 +251,12 @@ func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 		h2.prefixAttrs, h2.suffixAttrs,
 		(*buffer.Buffer)(&h2.preformattedAttrs), false)
 	defer state.free()
-	state.prefix.Write(h.prefix)
-	if pfa := h2.preformattedAttrs; len(pfa) > 0 {
-		state.emitSep = true
-	}
+	state.bufStart = h2.preformattedAttrsStart
+	state.prefix.Write(h2.prefix)
 	state.appendAttrs(as)
 	h2.prefixAttrs = state.prefixAttrs
 	h2.suffixAttrs = state.suffixAttrs
+	h2.preformattedAttrsStart = state.bufStart
 	return h2
 }
 
@@ -296,21 +305,19 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 		}
 		state.appendAttr(Any(SourceKey, src))
 	}
+	// To inject prefix attrs before the message, we need to know where the message
+	// starts and is next attr appended at this point has skipped attrSep
+	// (may happens if there were no attrs yet and next attr has no Format).
+	state.bufStart = sepNone
+	messagePos := state.buf.Len()
+	// message
 	key = MessageKey
 	msg := r.Message
-	messagePos := state.buf.Len()
-	_, messageHasFormat := h.opts.Format[key]
-	messageEmitSep := state.emitSep
-	messagePresent := true
-	if rep == nil && !messageHasFormat {
+	if _, ok := h.opts.Format[key]; rep == nil && !ok {
 		state.appendKey(key)
 		state.appendString(msg)
 	} else {
 		state.appendAttr(String(key, msg))
-		if state.buf.Len() == messagePos {
-			// Message was removed by ReplaceAttr or Format with zero AttrFormat.
-			messagePresent = false
-		}
 	}
 
 	state.groups = stateGroups // Restore groups passed to ReplaceAttrs.
@@ -334,13 +341,8 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 			}
 		}
 		// Write the message and the rest of non-suffix attrs.
-		if messagePresent && !messageHasFormat {
-			switch {
-			case buf.Len() == 0 && messageEmitSep:
-				messagePos++ // skip leading separator
-			case buf.Len() > 0 && !messageEmitSep:
-				buf.WriteByte(attrSep)
-			}
+		if buf.Len() > 0 && state.bufStart == sepSkipped {
+			buf.WriteByte(attrSep)
 		}
 		buf.Write((*state.buf)[messagePos:])
 	}
@@ -367,11 +369,16 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 func (s *handleState) appendNonBuiltIns(r Record) {
 	// preformatted Attrs
 	if pfa := s.h.preformattedAttrs; len(pfa) > 0 {
-		if s.emitSep {
+		if len(*s.buf) > 0 && s.h.preformattedAttrsStart == sepSkipped {
 			s.buf.WriteByte(attrSep)
+			if s.bufStart == sepNone {
+				s.bufStart = sepIncluded
+			}
+		} else if s.bufStart == sepNone {
+			s.bufStart = s.h.preformattedAttrsStart
 		}
 		s.buf.Write(pfa)
-		s.emitSep = true
+
 	}
 	// Attrs in Record -- unlike the built-in ones, they are in groups started
 	// from WithGroup.
@@ -391,8 +398,8 @@ type handleState struct {
 	prefixAttrs layoutAttrs
 	suffixAttrs layoutAttrs
 	buf         *buffer.Buffer
-	freeBuf     bool           // should buf be freed?
-	emitSep     bool           // whether to emit a separator before next key
+	freeBuf     bool // should buf be freed?
+	bufStart    startSepState
 	prefix      *buffer.Buffer // key prefix
 	groups      *[]string      // pool-allocated slice of active groups, for ReplaceAttr
 }
@@ -416,7 +423,7 @@ func (h *LayoutHandler) newHandleState(
 	s.suffixAttrs = suffixAttrs
 	s.buf = buf
 	s.freeBuf = freeBuf
-	s.emitSep = false
+	s.bufStart = sepNone
 	s.prefix = buffer.New()
 	if h.opts.ReplaceAttr != nil {
 		s.groups = groupPool.Get().(*[]string)
@@ -511,7 +518,7 @@ func (s *handleState) appendAttr(a Attr) {
 		key := s.key(a.Key)
 
 		// Redirect output to prefixAttrs.buf or suffixAttrs.buf if needed.
-		// Keep the original emitSep state when output is redirected.
+		// Keep the original bufStart state when output is redirected.
 		var layout *layoutAttrs
 		var layoutIndex int
 		if layoutIndex = s.prefixAttrs.index(key); layoutIndex >= 0 {
@@ -521,12 +528,11 @@ func (s *handleState) appendAttr(a Attr) {
 		}
 
 		origBuf := s.buf
-		origEmitSep := s.emitSep
+		origBufStart := s.bufStart
 		var layoutPos int
 		if layout != nil {
 			layoutPos = layout.pos()
 			s.buf = layout.buffer()
-			s.emitSep = false
 		}
 
 		if format, ok := s.h.opts.Format[key]; ok {
@@ -534,12 +540,15 @@ func (s *handleState) appendAttr(a Attr) {
 		} else {
 			s.appendKey(key)
 			s.appendValue(a.Value)
+			if layoutPos > 0 { // appendKey has added attrSep
+				layoutPos++
+			}
 		}
 
 		if layout != nil {
 			layout.set(layoutIndex, layoutPos)
 			s.buf = origBuf
-			s.emitSep = origEmitSep
+			s.bufStart = origBufStart
 		}
 	}
 }
@@ -612,8 +621,10 @@ func (s *handleState) appendFormat(format AttrFormat, v Value) {
 		s.buf.WriteString(format.Suffix)
 	}
 
-	if format.Prefix != "" || format.MaxWidth != 0 || format.Suffix != "" {
-		s.emitSep = true
+	if s.bufStart == sepNone {
+		if format.Prefix != "" || format.MaxWidth != 0 || format.Suffix != "" {
+			s.bufStart = sepIncluded
+		}
 	}
 }
 
@@ -622,12 +633,16 @@ func (s *handleState) appendError(err error) {
 }
 
 func (s *handleState) appendKey(key string) {
-	if s.emitSep {
+	if len(*s.buf) > 0 {
 		s.buf.WriteByte(attrSep)
+		if s.bufStart == sepNone {
+			s.bufStart = sepIncluded
+		}
+	} else if s.bufStart == sepNone {
+		s.bufStart = sepSkipped
 	}
 	s.appendString(key)
 	s.buf.WriteByte('=')
-	s.emitSep = true
 }
 
 func (s *handleState) appendString(str string) {

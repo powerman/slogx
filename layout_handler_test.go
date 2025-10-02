@@ -2,8 +2,10 @@ package slogx_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"testing"
@@ -457,89 +459,19 @@ func TestLayoutHandler_Layout(tt *testing.T) {
 			L{"d", "b", "a", "bad", "bad2"},
 			`^time=\S+ level=INFO e=5 d=4 b=2 msg=test c=3 a=1$`,
 		},
-		// Prefix before message at start of line.
-		{
-			"prefix excluded",
-			F{"time": "", "level": "", "a": "", "b": ""},
-			L{"a", "b"},
-			nil,
-			`^msg=test c=3 d=4 e=5$`,
-		},
-		{
-			"prefix no format",
-			F{"time": "", "level": ""},
-			L{"a"},
-			nil,
-			`^a=1 msg=test b=2 c=3 d=4 e=5$`,
-		},
-		{
-			"prefix format",
-			F{"time": "", "level": "", "a": "%s"},
-			L{"a"},
-			nil,
-			`^1 msg=test b=2 c=3 d=4 e=5$`,
-		},
-		// Prefix before missing message.
-		{
-			"prefix excluded no msg",
-			F{"time": "", "level": "", "msg": "", "a": "", "b": ""},
-			L{"a", "b"},
-			nil,
-			`^c=3 d=4 e=5$`,
-		},
-		{
-			"prefix no format no msg",
-			F{"time": "", "level": "", "msg": ""},
-			L{"a"},
-			nil,
-			`^a=1 b=2 c=3 d=4 e=5$`,
-		},
-		{
-			"prefix format no msg",
-			F{"time": "", "level": "", "msg": "", "a": "%s"},
-			L{"a"},
-			nil,
-			`^1 b=2 c=3 d=4 e=5$`,
-		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
 			t := check.T(tt)
 
-			logger1 := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+			opts1 := slogx.LayoutHandlerOptions{
 				Format:     tc.format,
 				PrefixKeys: tc.prefixKeys,
 				SuffixKeys: tc.suffixKeys,
-			}))
-
-			excludedKeys := []string{}
-			format := make(F)
-			for k, v := range tc.format {
-				if v == "" {
-					excludedKeys = append(excludedKeys, k)
-				} else {
-					format[k] = v
-				}
 			}
-			replaceAttr := func(groups []string, a slog.Attr) slog.Attr {
-				key := a.Key
-				if len(groups) > 0 {
-					key = strings.Join(groups, ".") + "." + a.Key
-				}
-				if slices.Contains(excludedKeys, key) {
-					return slog.Attr{}
-				}
-				return a
-			}
-			if len(excludedKeys) == 0 {
-				replaceAttr = nil
-			}
-			logger2 := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
-				ReplaceAttr: replaceAttr,
-				Format:      format,
-				PrefixKeys:  tc.prefixKeys,
-				SuffixKeys:  tc.suffixKeys,
-			}))
+			opts2 := optsFormatToReplaceAttr(opts1)
+			logger1 := slog.New(slogx.NewLayoutHandler(&buf, &opts1))
+			logger2 := slog.New(slogx.NewLayoutHandler(&buf, &opts2))
 
 			for i, logger := range []*slog.Logger{logger1, logger2} {
 				buf.Reset()
@@ -550,5 +482,186 @@ func TestLayoutHandler_Layout(tt *testing.T) {
 				t.Match(got[:len(got)-1], tc.want, "logger%d", i+1)
 			}
 		})
+	}
+}
+
+func TestLayoutHandler_AttrSep(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+
+	const (
+		attrStd    = 1 << iota // time, level
+		attrPrefix             // attrs listed in PrefixKeys and added using slog.With or slog.Info
+		attrMsg                // msg
+		attrWith               // preformatted attrs added using slog.With not listed in prefix or suffix
+		attrNormal             // normal attrs passed to slog.Info not listed in prefix or suffix
+		attrSuffix             // attrs listed in SuffixKeys and added using slog.With or slog.Info
+		attrMax
+	)
+	const (
+		amountOne  = "one"
+		amountMany = "many"
+	)
+
+	for attrMask := range attrMax {
+		opts1 := slogx.LayoutHandlerOptions{
+			Format:     make(map[string]string),
+			PrefixKeys: []string{"pre1", "pre2"},
+			SuffixKeys: []string{"suf1", "suf2"},
+		}
+		if attrMask&attrStd == 0 {
+			opts1.Format[slog.TimeKey] = ""
+			opts1.Format[slog.LevelKey] = ""
+		}
+		if attrMask&attrPrefix == 0 {
+			opts1.Format["pre1"] = ""
+			opts1.Format["pre2"] = ""
+		}
+		if attrMask&attrMsg == 0 {
+			opts1.Format[slog.MessageKey] = ""
+		}
+		if attrMask&attrWith == 0 {
+			opts1.Format["with1"] = ""
+			opts1.Format["with2"] = ""
+		}
+		if attrMask&attrNormal == 0 {
+			opts1.Format["norm1"] = ""
+			opts1.Format["norm2"] = ""
+		}
+		if attrMask&attrSuffix == 0 {
+			opts1.Format["suf1"] = ""
+			opts1.Format["suf2"] = ""
+		}
+		opts2 := opts1
+		opts2.Format = maps.Clone(opts1.Format)
+		for _, key := range []string{
+			slog.TimeKey, slog.LevelKey,
+			"pre1", "pre2",
+			slog.MessageKey,
+			"with1", "with2",
+			"norm1", "norm2",
+			"suf1", "suf2",
+		} {
+			if _, ok := opts2.Format[key]; !ok {
+				opts2.Format[key] = " " + key + "=%s"
+			}
+		}
+		opts3 := optsFormatToReplaceAttr(opts1)
+		opts4 := optsFormatToReplaceAttr(opts2)
+		for i, opts := range []slogx.LayoutHandlerOptions{opts1, opts2, opts3, opts4} {
+			for _, amount := range []string{amountOne, amountMany} {
+				// Test all combinations of:
+				// - presence/absence of each attribute group (attrMask)
+				//   (std, prefix, msg, with, normal, suffix)
+				// - default or custom format (opts1/3 vs opts2/4)
+				// - removal by format "" vs replaceAttr (opts1/2 vs opts3/4)
+				// - single vs multiple attributes in each group (amount)
+				t.Run(fmt.Sprintf("%06b opts%d %s", attrMask, i, amount), func(tt *testing.T) {
+					t := check.T(tt)
+					t.Parallel()
+					var buf bytes.Buffer
+					logger := slog.New(slogx.NewLayoutHandler(&buf, &opts))
+
+					wants := []string{}
+					if i == 1 || i == 3 {
+						wants = append(wants, ``)
+					}
+					if attrMask&attrStd != 0 {
+						wants = append(wants, `time=\S+`, `level=INFO`)
+					}
+					if attrMask&attrPrefix != 0 {
+						wants = append(wants, `pre1=PRE1`)
+						if amount == amountMany {
+							wants = append(wants, `pre2=PRE2`)
+						}
+					}
+					if attrMask&attrMsg != 0 {
+						wants = append(wants, `msg=test`)
+					}
+					if attrMask&attrWith != 0 {
+						wants = append(wants, `with1=WITH1`)
+						if amount == amountMany {
+							wants = append(wants, `with2=WITH2`)
+						}
+					}
+					if attrMask&attrNormal != 0 {
+						wants = append(wants, `norm1=NORM1`)
+						if amount == amountMany {
+							wants = append(wants, `norm2=NORM2`)
+						}
+					}
+					if attrMask&attrSuffix != 0 {
+						wants = append(wants, `suf1=SUF1`)
+						if amount == amountMany {
+							wants = append(wants, `suf2=SUF2`)
+						}
+					}
+					want := "^" + strings.Join(wants, " ") + "$"
+
+					withAttrs := []any{
+						slog.String("with1", "WITH1"),
+					}
+					normAttrs := []any{
+						slog.String("norm1", "NORM1"),
+						slog.String("pre1", "PRE1"),
+						slog.String("suf1", "SUF1"),
+					}
+					if amount == amountMany {
+						withAttrs = append(withAttrs,
+							slog.String("with2", "WITH2"))
+						normAttrs = append(normAttrs,
+							slog.String("norm2", "NORM2"),
+							slog.String("pre2", "PRE2"),
+							slog.String("suf2", "SUF2"))
+					}
+					logger.With(withAttrs...).Info("test", normAttrs...)
+
+					got := buf.String()
+					t.Must(t.NotEqual(got, ""))
+					t.Must(t.Equal(got[len(got)-1], byte('\n')))
+					t.Match(got[:len(got)-1], want)
+				})
+			}
+		}
+	}
+}
+
+func optsFormatToReplaceAttr(opts slogx.LayoutHandlerOptions) slogx.LayoutHandlerOptions {
+	excludedKeys := []string{}
+	format := make(map[string]string)
+	for k, v := range opts.Format {
+		if v == "" {
+			excludedKeys = append(excludedKeys, k)
+		} else {
+			format[k] = v
+		}
+	}
+	replaceAttr := func(groups []string, a slog.Attr) slog.Attr {
+		key := a.Key
+		if len(groups) > 0 {
+			key = strings.Join(groups, ".") + "." + a.Key
+		}
+		if slices.Contains(excludedKeys, key) {
+			return slog.Attr{}
+		}
+		return a
+	}
+	if len(excludedKeys) == 0 {
+		replaceAttr = nil
+	}
+	if opts.ReplaceAttr != nil {
+		if replaceAttr == nil {
+			replaceAttr = opts.ReplaceAttr
+		} else {
+			replaceAttr = slogx.ChainReplaceAttr(opts.ReplaceAttr, replaceAttr)
+		}
+	}
+	return slogx.LayoutHandlerOptions{
+		AddSource:   opts.AddSource,
+		Level:       opts.Level,
+		ReplaceAttr: replaceAttr,
+		Format:      format,
+		PrefixKeys:  opts.PrefixKeys,
+		SuffixKeys:  opts.SuffixKeys,
 	}
 }

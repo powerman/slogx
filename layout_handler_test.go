@@ -737,3 +737,109 @@ func optsFormatToReplaceAttr(opts slogx.LayoutHandlerOptions) slogx.LayoutHandle
 		SuffixKeys:  opts.SuffixKeys,
 	}
 }
+
+func BenchmarkLayoutHandler(b *testing.B) {
+	opts := slogx.LayoutHandlerOptions{
+		Format: map[string]string{
+			slog.LevelKey: " %-5s",
+			// prefix
+			"app":        " %12.12s:",
+			"pkg":        " %9.9s:",
+			"server":     " [%s]",
+			"remoteIP":   " %-15s",
+			"requestID":  " %s",
+			"grpcCode":   " %-16.16s",
+			"httpCode":   " %3s",
+			"httpMethod": "      %7s",
+			"handler":    " %s:",
+			"op":         " %s:",
+			"service":    " %s",
+			"method":     " %s:",
+			// normal
+			"addr":    " %s",
+			"host":    " %s",
+			"port":    ":%s",
+			"version": " version %s",
+			"offset":  " page=%3s",
+			"limit":   "+%s",
+			"err":     " err: %s",
+			// suffix
+			"userID":    " @%s",
+			"accountID": ":%s",
+		},
+		PrefixKeys: []string{
+			"app",
+			"pkg",
+			"server",
+			"remoteIP",
+			"requestID",
+			"grpcCode",
+			"httpCode",
+			"httpMethod",
+			"handler",
+			"op",
+			"service",
+			"method",
+		},
+		SuffixKeys: []string{
+			"userID",
+			"accountID",
+			slog.SourceKey,
+			slogx.StackKey,
+		},
+	}
+	for _, handler := range []struct {
+		name string
+		h    slog.Handler
+	}{
+		{"Layout", slogx.NewLayoutHandler(io.Discard, &opts)},
+		{"Text", slog.NewTextHandler(io.Discard, nil)}, //nolint:sloglint // Benchmark.
+		{"JSON", slog.NewJSONHandler(io.Discard, nil)}, //nolint:sloglint // Benchmark.
+	} {
+		logger := slog.New(handler.h)
+		b.Run(handler.name, func(b *testing.B) {
+			for _, call := range []struct {
+				name string
+				f    func()
+			}{
+				{"just msg", func() {
+					logger.Info("test")
+				}},
+				{"handle http request", func() {
+					logger2 := logger.
+						// set in main()
+						With("app", "myapp").
+						// set in HTTP middleware
+						With(
+							"server", "HTTP",
+							"remoteIP", "127.0.0.1",
+							"httpCode", "", // placeholder
+							"httpMethod", "GET",
+							"handler", "/v1/thing",
+						).
+						// set in auth middleware
+						With(
+							"userID", "user-1234",
+							"accountID", "account-5678",
+						)
+					logger2.Warn("something happened",
+						"pkg", "something",
+						"method", "doSomething",
+						"err", io.EOF)
+					logger2.Info("handled request",
+						"pkg", "mypkg",
+						"httpCode", 200)
+				}},
+			} {
+				b.Run(call.name, func(b *testing.B) {
+					b.ReportAllocs()
+					b.RunParallel(func(pb *testing.PB) {
+						for pb.Next() {
+							call.f()
+						}
+					})
+				})
+			}
+		})
+	}
+}

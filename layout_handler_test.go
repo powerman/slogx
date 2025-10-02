@@ -494,6 +494,69 @@ func TestLayoutHandler_Layout(tt *testing.T) {
 	}
 }
 
+func TestLayoutHandler_LayoutWith(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+		Format: map[string]string{
+			slog.TimeKey:  "",
+			slog.LevelKey: "",
+			"g.p":         " G.p=%s",
+			"g.s":         " G.s=%s",
+			"g.g2.p":      " g.G2.p=%s",
+			"g.g2.s":      " g.G2.s=%s",
+		},
+		PrefixKeys: []string{"g.p", "p", "g.g2.p"},
+		SuffixKeys: []string{"g.s", "s", "g.g2.s"},
+	}))
+	tests := []struct {
+		name string
+		f    func()
+		want string
+	}{
+		{
+			"replace",
+			func() {
+				logger.With("p", -100, "s", 42, "a", 10).
+					With("s", 2, "s", 3, "a", 20, "a", 30).
+					Info("Test", "p", -3, "a", 40)
+			},
+			`^p=-3 msg=Test a=10 a=20 a=30 a=40 s=3$`,
+		},
+		{
+			"replace in group",
+			func() {
+				logger.With(slog.Group("g", "p", -1, "s", 1, "a", "A")).
+					Info("Test", slog.Group("g", "p", -2, "s", 2))
+			},
+			`^ G.p=-2 msg=Test g.a=A G.s=2$`,
+		},
+		{
+			"WithGroup",
+			func() {
+				logger.With("p", -1, "s", 1).
+					WithGroup("g").
+					With("p", -2, "s", 2).
+					WithGroup("g2").
+					Info("Test", "p", -3, "s", 3, "a", 0)
+			},
+			`^ G.p=-2 p=-1 g.G2.p=-3 msg=Test g.g2.a=0 G.s=2 s=1 g.G2.s=3$`,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(tt *testing.T) {
+			t := check.T(tt)
+			buf.Reset()
+			tc.f()
+			got := buf.String()
+			t.Must(t.NotEqual(got, ""))
+			t.Must(t.Equal(got[len(got)-1], byte('\n')))
+			t.Match(got[:len(got)-1], tc.want)
+		})
+	}
+}
+
 func TestLayoutHandler_AttrSep(tt *testing.T) {
 	t := check.T(tt)
 	t.Parallel()

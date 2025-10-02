@@ -441,6 +441,7 @@ func (s *handleState) free() {
 		groupPool.Put(gs)
 	}
 	s.prefix.Free()
+	*s = handleState{} // avoid retaining references
 	handleStatePool.Put(s)
 }
 

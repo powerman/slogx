@@ -9,11 +9,20 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/slogtest"
 
 	"github.com/powerman/check"
 
 	"github.com/powerman/slogx"
 )
+
+func TestLayoutHandler(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var buf bytes.Buffer
+	h := slogx.NewLayoutHandler(&buf, nil)
+	t.Nil(slogtest.TestHandler(h, makeTextResults(t, &buf)))
+}
 
 func TestLayoutHandler_StdOptions(tt *testing.T) {
 	t := check.T(tt)

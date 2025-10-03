@@ -119,7 +119,6 @@ type LayoutHandlerOptions struct {
 }
 
 type layoutAttrs struct {
-	opts *LayoutHandlerOptions
 	attr [][]byte // index from prefix/suffix keys -> preformatted attr
 }
 
@@ -129,20 +128,18 @@ func makeLayoutAttrs(opts *LayoutHandlerOptions) layoutAttrs {
 		attr[i] = make([]byte, 0, 32) // preallocate some space
 	}
 	return layoutAttrs{
-		opts: opts,
 		attr: attr,
 	}
 }
 
 func (la layoutAttrs) clone() layoutAttrs {
 	return layoutAttrs{
-		opts: la.opts,
 		attr: slices.Clone(la.attr),
 	}
 }
 
-func (la layoutAttrs) hasPrefix() bool {
-	for i := range la.opts.PrefixKeys {
+func (la layoutAttrs) hasPrefix(opts *LayoutHandlerOptions) bool {
+	for i := range opts.PrefixKeys {
 		if len(la.attr[i]) > 0 {
 			return true
 		}
@@ -150,14 +147,14 @@ func (la layoutAttrs) hasPrefix() bool {
 	return false
 }
 
-func (la *layoutAttrs) buffer(key string) *buffer.Buffer {
-	i := slices.Index(la.opts.PrefixKeys, key)
+func (la *layoutAttrs) buffer(key string, opts *LayoutHandlerOptions) *buffer.Buffer {
+	i := slices.Index(opts.PrefixKeys, key)
 	if i < 0 {
-		i = slices.Index(la.opts.SuffixKeys, key)
+		i = slices.Index(opts.SuffixKeys, key)
 		if i < 0 {
 			return nil
 		}
-		i += len(la.opts.PrefixKeys)
+		i += len(opts.PrefixKeys)
 	}
 	if len(la.attr[i]) > 0 {
 		la.attr[i] = make([]byte, 0, 32) // replace old value, preallocate some space
@@ -332,7 +329,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 
 	buf := state.buf
 	layoutAttrs := &state.layoutAttrs
-	if layoutAttrs.hasPrefix() {
+	if layoutAttrs.hasPrefix(h.opts) {
 		buf = buffer.New()
 		defer buf.Free()
 		// Insert prefix attrs before the message.
@@ -520,7 +517,7 @@ func (s *handleState) appendAttr(a Attr) {
 
 		// Redirect output to layoutAttrs if needed.
 		// Keep the original bufStart state when output is redirected.
-		layoutBuf := s.layoutAttrs.buffer(key)
+		layoutBuf := s.layoutAttrs.buffer(key, s.h.opts)
 		origBuf := s.buf
 		origBufStart := s.bufStart
 		if layoutBuf != nil {

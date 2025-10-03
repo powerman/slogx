@@ -120,14 +120,17 @@ type LayoutHandlerOptions struct {
 
 type layoutAttrs struct {
 	opts *LayoutHandlerOptions
-	attr [][]byte // index from prefix/suffix keys -> subslice of buf
-	buf  []byte   // preformatted attrs (without attrSep)
+	attr [][]byte // index from prefix/suffix keys -> preformatted attr
 }
 
 func makeLayoutAttrs(opts *LayoutHandlerOptions) layoutAttrs {
+	attr := make([][]byte, len(opts.PrefixKeys)+len(opts.SuffixKeys))
+	for i := range attr {
+		attr[i] = make([]byte, 0, 32) // preallocate some space
+	}
 	return layoutAttrs{
 		opts: opts,
-		attr: make([][]byte, len(opts.PrefixKeys)+len(opts.SuffixKeys)),
+		attr: attr,
 	}
 }
 
@@ -135,12 +138,7 @@ func (la layoutAttrs) clone() layoutAttrs {
 	return layoutAttrs{
 		opts: la.opts,
 		attr: slices.Clone(la.attr),
-		buf:  slices.Clip(la.buf),
 	}
-}
-
-func (la layoutAttrs) pos() int {
-	return len(la.buf)
 }
 
 func (la layoutAttrs) hasPrefix() bool {
@@ -152,22 +150,19 @@ func (la layoutAttrs) hasPrefix() bool {
 	return false
 }
 
-func (la *layoutAttrs) buffer() *buffer.Buffer {
-	return (*buffer.Buffer)(&la.buf)
-}
-
-func (la layoutAttrs) index(key string) int {
-	if i := slices.Index(la.opts.PrefixKeys, key); i >= 0 {
-		return i
+func (la *layoutAttrs) buffer(key string) *buffer.Buffer {
+	i := slices.Index(la.opts.PrefixKeys, key)
+	if i < 0 {
+		i = slices.Index(la.opts.SuffixKeys, key)
+		if i < 0 {
+			return nil
+		}
+		i += len(la.opts.PrefixKeys)
 	}
-	if i := slices.Index(la.opts.SuffixKeys, key); i >= 0 {
-		return i + len(la.opts.PrefixKeys)
+	if len(la.attr[i]) > 0 {
+		la.attr[i] = make([]byte, 0, 32) // replace old value, preallocate some space
 	}
-	return -1
-}
-
-func (la *layoutAttrs) set(index int, start int) {
-	la.attr[index] = la.buf[start:]
+	return (*buffer.Buffer)(&la.attr[i])
 }
 
 type startSepState int
@@ -523,16 +518,13 @@ func (s *handleState) appendAttr(a Attr) {
 	} else {
 		key := s.key(a.Key)
 
-		// Redirect output to prefixAttrs.buf or suffixAttrs.buf if needed.
+		// Redirect output to layoutAttrs if needed.
 		// Keep the original bufStart state when output is redirected.
-		layoutIndex := s.layoutAttrs.index(key)
-
+		layoutBuf := s.layoutAttrs.buffer(key)
 		origBuf := s.buf
 		origBufStart := s.bufStart
-		var layoutPos int
-		if layoutIndex >= 0 {
-			layoutPos = s.layoutAttrs.pos()
-			s.buf = s.layoutAttrs.buffer()
+		if layoutBuf != nil {
+			s.buf = layoutBuf
 		}
 
 		if format, ok := s.h.opts.Format[key]; ok {
@@ -540,13 +532,9 @@ func (s *handleState) appendAttr(a Attr) {
 		} else {
 			s.appendKey(key)
 			s.appendValue(a.Value)
-			if layoutPos > 0 { // appendKey has added attrSep
-				layoutPos++
-			}
 		}
 
-		if layoutIndex >= 0 {
-			s.layoutAttrs.set(layoutIndex, layoutPos)
+		if layoutBuf != nil {
 			s.buf = origBuf
 			s.bufStart = origBufStart
 		}

@@ -269,8 +269,12 @@ func (h *LayoutHandler) WithGroup(name string) Handler {
 // Handle is the internal implementation of Handler.Handle
 // used by TextHandler and LayoutHandler.
 func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
-	layoutAttrs := h.layoutAttrs.clone()
-	state := h.newHandleState(layoutAttrs, buffer.New(), true)
+	var state *handleState
+	if r.NumAttrs() == 0 {
+		state = h.newHandleState(h.layoutAttrs, buffer.New(), true)
+	} else {
+		state = h.newHandleState(h.layoutAttrs.clone(), buffer.New(), true)
+	}
 	defer state.free()
 	// Built-in attributes. They are not in a group.
 	stateGroups := state.groups
@@ -323,13 +327,13 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	state.appendNonBuiltIns(r)
 
 	buf := state.buf
-	if layoutAttrs.hasPrefix(h.opts) {
+	if state.layoutAttrs.hasPrefix(h.opts) {
 		buf = buffer.New()
 		defer buf.Free()
 		// Insert prefix attrs before the message.
 		buf.Write((*state.buf)[:messagePos])
 		for i, k := range h.opts.PrefixKeys {
-			a := layoutAttrs[i]
+			a := state.layoutAttrs[i]
 			if len(a) > 0 {
 				if _, ok := h.opts.Format[k]; buf.Len() > 0 && !ok {
 					buf.WriteByte(attrSep)
@@ -346,7 +350,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// Append suffix attrs after all other attrs.
 	offset := len(h.opts.PrefixKeys)
 	for i, k := range h.opts.SuffixKeys {
-		a := layoutAttrs[offset+i]
+		a := state.layoutAttrs[offset+i]
 		if len(a) > 0 {
 			if _, ok := h.opts.Format[k]; buf.Len() > 0 && !ok {
 				buf.WriteByte(attrSep)

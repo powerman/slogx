@@ -82,6 +82,12 @@ type LayoutHandlerOptions struct {
 	//   " password=REDACTED" - when used for key "password" will hide the actual value
 	//   "" - attribute with this key is not output (alternative to using ReplaceAttr)
 	//
+	// Special cases:
+	// - For slog.TimeKey minimum and maximum width means substring offset and length:
+	//  "%11.12s" will output "15:04:05.999", "%.10s" will output "2006-01-02".
+	// - For slog.LevelKey minimum=3 and maximum=3 will result in short level names:
+	//   "DBG", "INF", "WRN", "ERR", "D±n", "I±n", "W±n", "E±n".
+	//
 	// If two keys are output next to each other (e.g. "host" and "port") then it is
 	// useful to include a custom separator (e.g. ':') in the format of the second key.
 	// For example: {"host": " [%s", "port": ":%s]"} will output " [example.com:80]".

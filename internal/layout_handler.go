@@ -30,6 +30,11 @@ const attrSep = ' '
 //
 // Value {MaxWidth: -1} results in outputting just the value, without attrSep, key and '='.
 // Zero value results in outputting nothing, same as removing the attr using ReplaceAttr.
+//
+// Special cases:
+//   - TimeKey with MinWidth > 0 and/or MaxWidth > 0 outputs time substring
+//     starting at MinWidth position with length up to MaxWidth.
+//   - LevelKey with MinWidth=3 and MaxWidth=3 outputs short level string (e.g. "WRN").
 type AttrFormat struct {
 	Prefix     string // Printed instead of attr key.
 	Suffix     string // Printed after the attr value.
@@ -523,7 +528,7 @@ func (s *handleState) appendAttr(a Attr) {
 		}
 
 		if format, ok := s.h.opts.Format[key]; ok {
-			s.appendFormat(format, a.Value)
+			s.appendFormat(format, key, a.Value)
 		} else {
 			s.appendKey(key)
 			s.appendValue(a.Value)
@@ -543,61 +548,40 @@ func (s *handleState) key(key string) string {
 	return key
 }
 
-func (s *handleState) appendFormat(format AttrFormat, v Value) {
+func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 	if format.Prefix != "" {
 		s.buf.WriteString(format.Prefix)
 	}
 
-	if format.MaxWidth != 0 {
-		pos := s.buf.Len()
-		s.appendValue(v)
-		// Count runes in the appended value up to max amount needed for next checks.
-		n := 0
-		// Detect quoted values to close the quote after truncation.
-		quoted := pos < s.buf.Len() && (*s.buf)[pos] == '"'
-		// Position after value's last rune that fits into MaxWidth (when enforced).
-		// The last rune is MaxWidth-1 for unquoted values and MaxWidth-2 for quoted.
-		cutPos := pos // Valid for MaxWidth=1 and quoted MaxWidth=2.
-		if nMax := max(format.MinWidth, format.MaxWidth); nMax > 0 {
-			for i := pos; i < s.buf.Len() && n <= nMax; {
-				_, size := utf8.DecodeRune((*s.buf)[i:])
-				i += size
-				n++
-				// Update cutPos for unquoted MaxWidth>=2 and quoted MaxWidth>2.
-				switch {
-				case format.MaxWidth >= 2 && !quoted && n == format.MaxWidth-1:
-					cutPos = i
-				case format.MaxWidth > 2 && quoted && n == format.MaxWidth-2:
-					cutPos = i
-				}
+	switch {
+	// Special case: time substring for "%O.Ls" format of TimeKey.
+	case (format.MinWidth > 0 || format.MaxWidth > 0) && key == TimeKey:
+		if t, ok := v.Any().(time.Time); ok {
+			pos := s.buf.Len()
+			s.appendTime(t)
+			start := min(s.buf.Len(), pos+format.MinWidth)
+			end := min(s.buf.Len(), start+format.MaxWidth)
+			if format.MaxWidth == -1 {
+				end = s.buf.Len()
 			}
+			if pos < start {
+				copy((*s.buf)[pos:], (*s.buf)[start:end])
+			}
+			s.buf.SetLen(pos + (end - start))
+		} else {
+			s.appendFormatValue(format, v)
 		}
-		if w := format.MaxWidth; w > 0 && n > w {
-			s.buf.SetLen(cutPos)
-			switch {
-			case !quoted:
-				s.buf.WriteString(`…`)
-			case w == 1:
-				s.buf.WriteString(`…`)
-			case w == 2:
-				s.buf.WriteString(`……`)
-			default:
-				s.buf.WriteString(`…"`)
-			}
-			n = w
+
+	// Special case: short level for "%3.3s" format of LevelKey.
+	case format.MinWidth == 3 && format.MaxWidth == 3 && key == LevelKey:
+		if l, ok := v.Any().(Level); ok {
+			s.buf.WriteString(shortLevel(l))
+		} else {
+			s.appendFormatValue(format, v)
 		}
-		if w := format.MinWidth; w > n {
-			pad := w - n
-			padStart := s.buf.Len()
-			s.buf.SetLen(padStart + pad)
-			if format.AlignRight {
-				padStart = pos
-				copy((*s.buf)[pos+pad:], (*s.buf)[pos:])
-			}
-			for i := range pad {
-				(*s.buf)[padStart+i] = ' '
-			}
-		}
+
+	case format.MaxWidth != 0:
+		s.appendFormatValue(format, v)
 	}
 
 	if format.Suffix != "" {
@@ -607,6 +591,58 @@ func (s *handleState) appendFormat(format AttrFormat, v Value) {
 	if s.bufStart == sepNone {
 		if format.Prefix != "" || format.MaxWidth != 0 || format.Suffix != "" {
 			s.bufStart = sepIncluded
+		}
+	}
+}
+
+func (s *handleState) appendFormatValue(format AttrFormat, v Value) {
+	pos := s.buf.Len()
+	s.appendValue(v)
+	// Count runes in the appended value up to max amount needed for next checks.
+	n := 0
+	// Detect quoted values to close the quote after truncation.
+	quoted := pos < s.buf.Len() && (*s.buf)[pos] == '"'
+	// Position after value's last rune that fits into MaxWidth (when enforced).
+	// The last rune is MaxWidth-1 for unquoted values and MaxWidth-2 for quoted.
+	cutPos := pos // Valid for MaxWidth=1 and quoted MaxWidth=2.
+	if nMax := max(format.MinWidth, format.MaxWidth); nMax > 0 {
+		for i := pos; i < s.buf.Len() && n <= nMax; {
+			_, size := utf8.DecodeRune((*s.buf)[i:])
+			i += size
+			n++
+			// Update cutPos for unquoted MaxWidth>=2 and quoted MaxWidth>2.
+			switch {
+			case format.MaxWidth >= 2 && !quoted && n == format.MaxWidth-1:
+				cutPos = i
+			case format.MaxWidth > 2 && quoted && n == format.MaxWidth-2:
+				cutPos = i
+			}
+		}
+	}
+	if w := format.MaxWidth; w > 0 && n > w {
+		s.buf.SetLen(cutPos)
+		switch {
+		case !quoted:
+			s.buf.WriteString(`…`)
+		case w == 1:
+			s.buf.WriteString(`…`)
+		case w == 2:
+			s.buf.WriteString(`……`)
+		default:
+			s.buf.WriteString(`…"`)
+		}
+		n = w
+	}
+	if w := format.MinWidth; w > n {
+		pad := w - n
+		padStart := s.buf.Len()
+		s.buf.SetLen(padStart + pad)
+		if format.AlignRight {
+			padStart = pos
+			copy((*s.buf)[pos+pad:], (*s.buf)[pos:])
+		}
+		for i := range pad {
+			(*s.buf)[padStart+i] = ' '
 		}
 	}
 }
@@ -675,4 +711,25 @@ func appendRFC3339Millis(b []byte, t time.Time) []byte {
 	b = t.AppendFormat(b, time.RFC3339Nano)
 	b = append(b[:n+prefixLen], b[n+prefixLen+1:]...) // drop the 4th digit
 	return b
+}
+
+func shortLevel(l Level) string {
+	switch {
+	case l == LevelDebug:
+		return "DBG"
+	case l < LevelInfo:
+		return fmt.Sprintf("D%+d", l-LevelDebug)
+	case l == LevelInfo:
+		return "INF"
+	case l < LevelWarn:
+		return fmt.Sprintf("I%+d", l-LevelInfo)
+	case l == LevelWarn:
+		return "WRN"
+	case l < LevelError:
+		return fmt.Sprintf("W%+d", l-LevelWarn)
+	case l == LevelError:
+		return "ERR"
+	default:
+		return fmt.Sprintf("E%+d", l-LevelError)
+	}
 }

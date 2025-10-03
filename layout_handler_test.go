@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"testing/slogtest"
+	"time"
 
 	"github.com/powerman/check"
 
@@ -300,6 +301,89 @@ func TestLayoutHandler_Format(tt *testing.T) {
 			t.Must(t.NotEqual(got, ""))
 			t.Must(t.Equal(got[len(got)-1], byte('\n')))
 			t.Match(got[:len(got)-1], tc.want)
+		})
+	}
+}
+
+func TestLayoutHandler_FormatSpecial(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var buf bytes.Buffer
+
+	type F = map[string]string
+	tests := []struct {
+		format F
+		level  slog.Level
+		want   string
+	}{
+		{nil, -2, "time=2006-01-02T15:04:05.789+01:00 level=DEBUG+2 msg=test"},
+		{nil, 4, "time=2006-01-02T15:04:05.789+01:00 level=WARN msg=test"},
+		{nil, 6, "time=2006-01-02T15:04:05.789+01:00 level=WARN+2 msg=test"},
+		{nil, 8, "time=2006-01-02T15:04:05.789+01:00 level=ERROR msg=test"},
+		{F{"level": " %.3s"}, -2, "time=2006-01-02T15:04:05.789+01:00 DE… msg=test"},
+		{F{"level": " %.3s"}, 4, "time=2006-01-02T15:04:05.789+01:00 WA… msg=test"},
+		{F{"level": " %.3s"}, 6, "time=2006-01-02T15:04:05.789+01:00 WA… msg=test"},
+		{F{"level": " %.3s"}, 8, "time=2006-01-02T15:04:05.789+01:00 ER… msg=test"},
+		{F{"level": " %3s"}, -2, "time=2006-01-02T15:04:05.789+01:00 DEBUG+2 msg=test"},
+		{F{"level": " %3s"}, 4, "time=2006-01-02T15:04:05.789+01:00 WARN msg=test"},
+		{F{"level": " %3s"}, 6, "time=2006-01-02T15:04:05.789+01:00 WARN+2 msg=test"},
+		{F{"level": " %3s"}, 8, "time=2006-01-02T15:04:05.789+01:00 ERROR msg=test"},
+		{F{"level": " %4.4s"}, -2, "time=2006-01-02T15:04:05.789+01:00 DEB… msg=test"},
+		{F{"level": " %4.4s"}, 4, "time=2006-01-02T15:04:05.789+01:00 WARN msg=test"},
+		{F{"level": " %4.4s"}, 6, "time=2006-01-02T15:04:05.789+01:00 WAR… msg=test"},
+		{F{"level": " %4.4s"}, 8, "time=2006-01-02T15:04:05.789+01:00 ERR… msg=test"},
+		{F{"level": " %3.3s"}, -2, "time=2006-01-02T15:04:05.789+01:00 D+2 msg=test"},
+		{F{"level": " %3.3s"}, 4, "time=2006-01-02T15:04:05.789+01:00 WRN msg=test"},
+		{F{"level": " %3.3s"}, 6, "time=2006-01-02T15:04:05.789+01:00 W+2 msg=test"},
+		{F{"level": " %3.3s"}, 8, "time=2006-01-02T15:04:05.789+01:00 ERR msg=test"},
+		{F{"level": " %-3.3s"}, -2, "time=2006-01-02T15:04:05.789+01:00 D+2 msg=test"},
+		{F{"level": " %-3.3s"}, 4, "time=2006-01-02T15:04:05.789+01:00 WRN msg=test"},
+		{F{"level": " %-3.3s"}, 6, "time=2006-01-02T15:04:05.789+01:00 W+2 msg=test"},
+		{F{"level": " %-3.3s"}, 8, "time=2006-01-02T15:04:05.789+01:00 ERR msg=test"},
+		{F{"level": " %2.2s"}, -2, "time=2006-01-02T15:04:05.789+01:00 D… msg=test"},
+		{F{"level": " %2.2s"}, 4, "time=2006-01-02T15:04:05.789+01:00 W… msg=test"},
+		{F{"level": " %2.2s"}, 6, "time=2006-01-02T15:04:05.789+01:00 W… msg=test"},
+		{F{"level": " %2.2s"}, 8, "time=2006-01-02T15:04:05.789+01:00 E… msg=test"},
+		{F{"time": "%.s"}, 0, "2006-01-02T15:04:05.789+01:00 level=INFO msg=test"},
+		{F{"time": "%.30s"}, 0, "2006-01-02T15:04:05.789+01:00 level=INFO msg=test"},
+		{F{"time": "%0.30s"}, 0, "2006-01-02T15:04:05.789+01:00 level=INFO msg=test"},
+		{F{"time": "%30s"}, 0, "level=INFO msg=test"},
+		{F{"time": "%30.s"}, 0, "level=INFO msg=test"},
+		{F{"time": "%30.0s"}, 0, "level=INFO msg=test"},
+		{F{"time": "%30.10s"}, 0, "level=INFO msg=test"},
+		{F{"time": "%30.50s"}, 0, "level=INFO msg=test"},
+		{F{"time": "%.10s"}, 0, "2006-01-02 level=INFO msg=test"},
+		{F{"time": "%0.10s"}, 0, "2006-01-02 level=INFO msg=test"},
+		{F{"time": "%11s"}, 0, "15:04:05.789+01:00 level=INFO msg=test"},
+		{F{"time": "%11.s"}, 0, "15:04:05.789+01:00 level=INFO msg=test"},
+		{F{"time": "%11.0s"}, 0, "level=INFO msg=test"},
+		{F{"time": "%11.12s"}, 0, "15:04:05.789 level=INFO msg=test"},
+		{F{"time": "%11.30s"}, 0, "15:04:05.789+01:00 level=INFO msg=test"},
+		{F{"time": "%-.10s"}, 0, "2006-01-02 level=INFO msg=test"},
+		{F{"time": "%-0.10s"}, 0, "2006-01-02 level=INFO msg=test"},
+		{F{"time": "%-11s"}, 0, "15:04:05.789+01:00 level=INFO msg=test"},
+		{F{"time": "%-11.s"}, 0, "15:04:05.789+01:00 level=INFO msg=test"},
+		{F{"time": "%-11.0s"}, 0, "level=INFO msg=test"},
+		{F{"time": "%-11.12s"}, 0, "15:04:05.789 level=INFO msg=test"},
+		{F{"time": "%-11.30s"}, 0, "15:04:05.789+01:00 level=INFO msg=test"},
+	}
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%s %+v", tc.level, tc.format), func(tt *testing.T) {
+			t := check.T(tt)
+			buf.Reset()
+			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+				Format: tc.format,
+				Level:  slog.LevelDebug,
+				ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+					if a.Key == slog.TimeKey && len(groups) == 0 {
+						now, _ := time.Parse(time.RFC3339Nano, "2006-01-02T15:04:05.789123456+01:00")
+						a.Value = slog.TimeValue(now)
+					}
+					return a
+				},
+			}))
+			logger.Log(t.Context(), tc.level, "test")
+			t.Equal(buf.String(), tc.want+"\n")
 		})
 	}
 }

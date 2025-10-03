@@ -12,15 +12,27 @@
 ![macOS | amd64 arm64](https://img.shields.io/badge/macOS-amd64%20arm64-royalblue)
 ![Windows | amd64 arm64](https://img.shields.io/badge/Windows-amd64%20arm64-royalblue)
 
-# Recommendations
+## Features
 
-## Using CtxHandler with linter
+### LayoutHandler
+
+`LayoutHandler` is an alternative to `slog.TextHandler`
+designed to make output easier to read with:
+
+- Compact output for given attrs by replacing " key=" prefix before value.
+- Reorder given attrs by moving them before message (prefix) or after other attrs (suffix).
+- Vertical align for prefix attrs by enforcing min/max value width.
+- Color output for given attrs.
+
+## Recommendations
+
+### Using CtxHandler with linter
 
 Disable non-Context slog functions (e.g. slog.Info) and methods using linter.
 
 Example in golangci-lint config:
 
-```
+```yaml
 linters-settings:
   ...
   forbidigo:

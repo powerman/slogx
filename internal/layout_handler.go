@@ -164,7 +164,7 @@ const (
 )
 
 type LayoutHandler struct {
-	opts                   LayoutHandlerOptions
+	opts                   *LayoutHandlerOptions
 	prefixAttrs            layoutAttrs // preformatted prefix attrs
 	suffixAttrs            layoutAttrs // preformatted suffix attrs
 	preformattedAttrs      []byte
@@ -206,7 +206,7 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	opts.SuffixKeys = suffixKeys
 
 	return &LayoutHandler{
-		opts:        *opts,
+		opts:        opts,
 		prefixAttrs: makeLayoutAttrs(opts.PrefixKeys),
 		suffixAttrs: makeLayoutAttrs(opts.SuffixKeys),
 		mu:          &sync.Mutex{},

@@ -41,6 +41,7 @@ type AttrFormat struct {
 	MinWidth   int    // Minimum width of the attr value.
 	MaxWidth   int    // Maximum width of the attr value. -1 means no limit. 0 means no value.
 	AlignRight bool
+	Alternate  bool // MaxWidth cuts from the end, not from the beginning.
 }
 
 type LayoutHandlerOptions struct {
@@ -602,14 +603,30 @@ func (s *handleState) appendFormatValue(format AttrFormat, v Value) {
 	n := 0
 	// Detect quoted values to close the quote after truncation.
 	quoted := pos < s.buf.Len() && (*s.buf)[pos] == '"'
+	// If Alternate is false, we cut from the end.
 	// Position after value's last rune that fits into MaxWidth (when enforced).
 	// The last rune is MaxWidth-1 for unquoted values and MaxWidth-2 for quoted.
 	cutPos := pos // Valid for MaxWidth=1 and quoted MaxWidth=2.
+	// If Alternate is true, we cut from the beginning.
+	// Position of the first rune that does fit into MaxWidth.
+	// The first rune is MaxWidth-1 from the end for unquoted values and
+	// MaxWidth-2 from the end for quoted values.
+	startPos := pos
 	if nMax := max(format.MinWidth, format.MaxWidth); nMax > 0 {
-		for i := pos; i < s.buf.Len() && n <= nMax; {
+		var sizes []int // Ring buffer of rune sizes for Alternate.
+		if format.Alternate && format.MaxWidth > 0 {
+			sizes = make([]int, format.MaxWidth)
+		}
+		for i := pos; i < s.buf.Len() && (n <= nMax || format.Alternate); {
 			_, size := utf8.DecodeRune((*s.buf)[i:])
 			i += size
 			n++
+			if len(sizes) > 0 {
+				if n > format.MaxWidth {
+					startPos += sizes[n%len(sizes)]
+				}
+				sizes[n%len(sizes)] = size
+			}
 			// Update cutPos for unquoted MaxWidth>=2 and quoted MaxWidth>2.
 			switch {
 			case format.MaxWidth >= 2 && !quoted && n == format.MaxWidth-1:
@@ -618,18 +635,53 @@ func (s *handleState) appendFormatValue(format AttrFormat, v Value) {
 				cutPos = i
 			}
 		}
+		if len(sizes) > 0 && n > format.MaxWidth {
+			startPos += sizes[(n+1)%len(sizes)] // Skip 1 for … marker.
+			if quoted && len(sizes) > 1 {
+				startPos += sizes[(n+2)%len(sizes)] // Skip 1 for opening quote.
+			}
+		}
 	}
 	if w := format.MaxWidth; w > 0 && n > w {
-		s.buf.SetLen(cutPos)
-		switch {
-		case !quoted:
-			s.buf.WriteString(`…`)
-		case w == 1:
-			s.buf.WriteString(`…`)
-		case w == 2:
-			s.buf.WriteString(`……`)
-		default:
-			s.buf.WriteString(`…"`)
+		if format.Alternate {
+			switch {
+			case w == 1:
+				s.buf.SetLen(pos)
+				s.buf.WriteString(`…`)
+			case quoted && w == 2:
+				s.buf.SetLen(pos)
+				s.buf.WriteString(`……`)
+			default:
+				var buf []byte
+				overwrite := 3 // 3 byte for …
+				if quoted {
+					overwrite++ // 1 byte for opening quote
+				}
+				if startPos-pos >= overwrite {
+					buf = (*s.buf)[startPos:]
+				} else {
+					buf = append([]byte(nil), (*s.buf)[startPos:]...)
+				}
+				s.buf.SetLen(pos)
+				if quoted {
+					s.buf.WriteString(`"…`)
+				} else {
+					s.buf.WriteString(`…`)
+				}
+				s.buf.Write(buf)
+			}
+		} else {
+			s.buf.SetLen(cutPos)
+			switch {
+			case !quoted:
+				s.buf.WriteString(`…`)
+			case w == 1:
+				s.buf.WriteString(`…`)
+			case w == 2:
+				s.buf.WriteString(`……`)
+			default:
+				s.buf.WriteString(`…"`)
+			}
 		}
 		n = w
 	}

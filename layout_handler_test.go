@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -89,16 +90,24 @@ func TestLayoutHandler_BadFormat(tt *testing.T) {
 			F{"bad": "%+s"},
 		},
 		{
-			"unknown flag #",
-			F{"bad": "%#s"},
-		},
-		{
 			"unknown flag space",
 			F{"bad": "% s"},
 		},
 		{
-			"multiple flags",
+			"multiple flags -",
 			F{"bad": "%--s"},
+		},
+		{
+			"multiple flags #",
+			F{"bad": "%##s"},
+		},
+		{
+			"multiple mixed flags -",
+			F{"bad": "%-#-s"},
+		},
+		{
+			"multiple mixed flags #",
+			F{"bad": "%#-#s"},
 		},
 		// MinWidth and MaxWidth must be unsigned and fit in int.
 		{
@@ -196,12 +205,22 @@ func TestLayoutHandler_Format(tt *testing.T) {
 		{"%-3.1s", slog.IntValue(5), `^5  $`},
 		{"%3.5s", slog.IntValue(5), `^  5$`},
 		{"%-3.5s", slog.IntValue(5), `^5  $`},
+		{"%#.1s", slog.StringValue("abcde"), `^…$`},
+		{"%#.2s", slog.StringValue("abcde"), `^…e$`},
+		{"%#.3s", slog.StringValue("abcde"), `^…de$`},
+		{"%#.4s", slog.StringValue("abcde"), `^…cde$`},
 		{"%.1s", slog.StringValue("abcde"), `^…$`},
 		{"%.2s", slog.StringValue("abcde"), `^a…$`},
 		{"%.3s", slog.StringValue("abcde"), `^ab…$`},
 		{"%.4s", slog.StringValue("abcde"), `^abc…$`},
 		{"%.5s", slog.StringValue("abcde"), `^abcde$`},
 		{"%.6s", slog.StringValue("abcde"), `^abcde$`},
+		{"%#.1s quoted", slog.StringValue("ab=de"), `^… quoted$`},
+		{"%#.2s quoted", slog.StringValue("ab=de"), `^…… quoted$`},
+		{"%#.3s quoted", slog.StringValue("ab=de"), `^"…" quoted$`},
+		{"%#.4s quoted", slog.StringValue("ab=de"), `^"…e" quoted$`},
+		{"%#.5s quoted", slog.StringValue("ab=de"), `^"…de" quoted$`},
+		{"%#.6s quoted", slog.StringValue("ab=de"), `^"…=de" quoted$`},
 		{"%.1s quoted", slog.StringValue("ab=de"), `^… quoted$`},
 		{"%.2s quoted", slog.StringValue("ab=de"), `^…… quoted$`},
 		{"%.3s quoted", slog.StringValue("ab=de"), `^"…" quoted$`},
@@ -210,6 +229,20 @@ func TestLayoutHandler_Format(tt *testing.T) {
 		{"%.6s quoted", slog.StringValue("ab=de"), `^"ab=…" quoted$`},
 		{"%.7s quoted", slog.StringValue("ab=de"), `^"ab=de" quoted$`},
 		{"%.8s quoted", slog.StringValue("ab=de"), `^"ab=de" quoted$`},
+		{"%#1.1s", slog.StringValue("abcde"), `^…$`},
+		{"%#-1.1s", slog.StringValue("abcde"), `^…$`},
+		{"%#2.1s", slog.StringValue("abcde"), `^ …$`},
+		{"%#-2.1s", slog.StringValue("abcde"), `^… $`},
+		{"%#3.1s", slog.StringValue("abcde"), `^  …$`},
+		{"%#-3.1s", slog.StringValue("abcde"), `^…  $`},
+		{"%#1.2s", slog.StringValue("abcde"), `^…e$`},
+		{"%#-1.2s", slog.StringValue("abcde"), `^…e$`},
+		{"%#2.2s", slog.StringValue("abcde"), `^…e$`},
+		{"%#-2.2s", slog.StringValue("abcde"), `^…e$`},
+		{"%#3.2s", slog.StringValue("abcde"), `^ …e$`},
+		{"%#-3.2s", slog.StringValue("abcde"), `^…e $`},
+		{"%#4.2s", slog.StringValue("abcde"), `^  …e$`},
+		{"%#-4.2s", slog.StringValue("abcde"), `^…e  $`},
 		{"%1.1s", slog.StringValue("abcde"), `^…$`},
 		{"%-1.1s", slog.StringValue("abcde"), `^…$`},
 		{"%2.1s", slog.StringValue("abcde"), `^ …$`},
@@ -236,6 +269,24 @@ func TestLayoutHandler_Format(tt *testing.T) {
 		{"%-5.6s", slog.StringValue("abcde"), `^abcde$`},
 		{"%6.6s", slog.StringValue("abcde"), `^ abcde$`},
 		{"%-6.6s", slog.StringValue("abcde"), `^abcde $`},
+		{"%#1.1s quoted", slog.StringValue("ab=de"), `^… quoted$`},
+		{"%-#1.1s quoted", slog.StringValue("ab=de"), `^… quoted$`},
+		{"%#2.1s quoted", slog.StringValue("ab=de"), `^ … quoted$`},
+		{"%-#2.1s quoted", slog.StringValue("ab=de"), `^…  quoted$`},
+		{"%#3.1s quoted", slog.StringValue("ab=de"), `^  … quoted$`},
+		{"%-#3.1s quoted", slog.StringValue("ab=de"), `^…   quoted$`},
+		{"%#1.2s quoted", slog.StringValue("ab=de"), `^…… quoted$`},
+		{"%-#1.2s quoted", slog.StringValue("ab=de"), `^…… quoted$`},
+		{"%#2.2s quoted", slog.StringValue("ab=de"), `^…… quoted$`},
+		{"%-#2.2s quoted", slog.StringValue("ab=de"), `^…… quoted$`},
+		{"%#3.2s quoted", slog.StringValue("ab=de"), `^ …… quoted$`},
+		{"%-#3.2s quoted", slog.StringValue("ab=de"), `^……  quoted$`},
+		{"%#5.6s quoted", slog.StringValue("ab=de"), `^"…=de" quoted$`},
+		{"%-#5.6s quoted", slog.StringValue("ab=de"), `^"…=de" quoted$`},
+		{"%#6.6s quoted", slog.StringValue("ab=de"), `^"…=de" quoted$`},
+		{"%-#6.6s quoted", slog.StringValue("ab=de"), `^"…=de" quoted$`},
+		{"%#7.6s quoted", slog.StringValue("ab=de"), `^ "…=de" quoted$`},
+		{"%-#7.6s quoted", slog.StringValue("ab=de"), `^"…=de"  quoted$`},
 		{"%1.1s quoted", slog.StringValue("ab=de"), `^… quoted$`},
 		{"%-1.1s quoted", slog.StringValue("ab=de"), `^… quoted$`},
 		{"%2.1s quoted", slog.StringValue("ab=de"), `^ … quoted$`},
@@ -254,6 +305,11 @@ func TestLayoutHandler_Format(tt *testing.T) {
 		{"%-6.6s quoted", slog.StringValue("ab=de"), `^"ab=…" quoted$`},
 		{"%7.6s quoted", slog.StringValue("ab=de"), `^ "ab=…" quoted$`},
 		{"%-7.6s quoted", slog.StringValue("ab=de"), `^"ab=…"  quoted$`},
+		{"%#.1s utf8", slog.StringValue("😄世ЮЯ界😊"), `^… utf8$`},
+		{"%#.2s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…😊 utf8$`},
+		{"%#.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…界😊 utf8$`},
+		{"%#.4s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…Я界😊 utf8$`},
+		{"%#.5s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…ЮЯ界😊 utf8$`},
 		{"%.1s utf8", slog.StringValue("😄世ЮЯ界😊"), `^… utf8$`},
 		{"%.2s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄… utf8$`},
 		{"%.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世… utf8$`},
@@ -261,12 +317,26 @@ func TestLayoutHandler_Format(tt *testing.T) {
 		{"%.5s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世ЮЯ… utf8$`},
 		{"%.6s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世ЮЯ界😊 utf8$`},
 		{"%.7s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世ЮЯ界😊 utf8$`},
+		{"%#2.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…界😊 utf8$`},
+		{"%#-2.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…界😊 utf8$`},
+		{"%#3.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…界😊 utf8$`},
+		{"%#-3.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…界😊 utf8$`},
+		{"%#4.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^ …界😊 utf8$`},
+		{"%#-4.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^…界😊  utf8$`},
 		{"%2.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世… utf8$`},
 		{"%-2.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世… utf8$`},
 		{"%3.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世… utf8$`},
 		{"%-3.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世… utf8$`},
 		{"%4.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^ 😄世… utf8$`},
 		{"%-4.3s utf8", slog.StringValue("😄世ЮЯ界😊"), `^😄世…  utf8$`},
+		{"%#.1s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^… utf8 quoted$`},
+		{"%#.2s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^…… utf8 quoted$`},
+		{"%#.3s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…" utf8 quoted$`},
+		{"%#.4s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…😊" utf8 quoted$`},
+		{"%#.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…界😊" utf8 quoted$`},
+		{"%#.6s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…Я界😊" utf8 quoted$`},
+		{"%#.7s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…=Я界😊" utf8 quoted$`},
+		{"%#.8s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…Ю=Я界😊" utf8 quoted$`},
 		{"%.1s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^… utf8 quoted$`},
 		{"%.2s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^…… utf8 quoted$`},
 		{"%.3s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…" utf8 quoted$`},
@@ -277,6 +347,12 @@ func TestLayoutHandler_Format(tt *testing.T) {
 		{"%.8s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"😄世Ю=Я…" utf8 quoted$`},
 		{"%.9s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"😄世Ю=Я界😊" utf8 quoted$`},
 		{"%.10s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"😄世Ю=Я界😊" utf8 quoted$`},
+		{"%#4.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…界😊" utf8 quoted$`},
+		{"%#-4.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…界😊" utf8 quoted$`},
+		{"%#5.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…界😊" utf8 quoted$`},
+		{"%#-5.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…界😊" utf8 quoted$`},
+		{"%#6.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^ "…界😊" utf8 quoted$`},
+		{"%#-6.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"…界😊"  utf8 quoted$`},
 		{"%4.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"😄世…" utf8 quoted$`},
 		{"%-4.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"😄世…" utf8 quoted$`},
 		{"%5.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"😄世…" utf8 quoted$`},
@@ -284,24 +360,31 @@ func TestLayoutHandler_Format(tt *testing.T) {
 		{"%6.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^ "😄世…" utf8 quoted$`},
 		{"%-6.5s utf8 quoted", slog.StringValue("😄世Ю=Я界😊"), `^"😄世…"  utf8 quoted$`},
 	}
+	reNoAlternate := regexp.MustCompile(`^%[-.0-9]*s`)
 	for _, tc := range tests {
-		t.Run(tc.format, func(tt *testing.T) {
-			t := check.T(tt)
-			buf.Reset()
-			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
-				Format: map[string]string{
-					slog.TimeKey:    "",
-					slog.LevelKey:   "",
-					slog.MessageKey: "",
-					"value":         tc.format,
-				},
-			}))
-			logger.Info("test", "value", tc.value)
-			got := buf.String()
-			t.Must(t.NotEqual(got, ""))
-			t.Must(t.Equal(got[len(got)-1], byte('\n')))
-			t.Match(got[:len(got)-1], tc.want)
-		})
+		formats := []string{tc.format}
+		if reNoAlternate.MatchString(tc.format) && !strings.Contains(tc.want, "…") {
+			formats = append(formats, "%#"+tc.format[1:])
+		}
+		for _, format := range formats {
+			t.Run(format, func(tt *testing.T) {
+				t := check.T(tt)
+				buf.Reset()
+				logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+					Format: map[string]string{
+						slog.TimeKey:    "",
+						slog.LevelKey:   "",
+						slog.MessageKey: "",
+						"value":         format,
+					},
+				}))
+				logger.Info("test", "value", tc.value)
+				got := buf.String()
+				t.Must(t.NotEqual(got, ""))
+				t.Must(t.Equal(got[len(got)-1], byte('\n')))
+				t.Match(got[:len(got)-1], tc.want)
+			})
+		}
 	}
 }
 

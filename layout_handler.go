@@ -66,7 +66,9 @@ type LayoutHandlerOptions struct {
 	// Use empty string value for a key to remove the attr from output.
 	//
 	// The format is a subset of the formats supported by fmt package:
-	// - single '%s' with optional alignment, minimum and maximum width for attr's value
+	// - single '%s' with optional flags, minimum and maximum width for value
+	// - flag '-' for left alignment (default is right alignment)
+	// - flag '#' for truncating value from the beginning instead of the end
 	// - '%%' for a '%'
 	// - other characters are output verbatim
 	//
@@ -76,6 +78,7 @@ type LayoutHandlerOptions struct {
 	//   "%-5s"          - only value without attr separator, left aligned, minimum width 5
 	//   " %10s"         - only value, right aligned, minimum width 10
 	//   " %.10s"        - only value, maximum width 10 (output is truncated if longer)
+	//   " %#.10s"       - same as above, but value is truncated from the beginning
 	//   " key=%-10.8s"  - left aligned, min width 10, max width 8 (right padded 2+ spaces)
 	//   " group.key=%s" - when used for key "group.key" will result in default output
 	//                     (but always with a space prefix even if it's the first attribute)
@@ -203,7 +206,7 @@ func parseAttrFormatMap(m map[string]string) map[string]internal.AttrFormat {
 	return af
 }
 
-var reAttrFormat = regexp.MustCompile(`^((?:[^%]+|%%)*)(%(-?)(\d*)[.]?(\d*)s)?((?:[^%]+|%%)*)$`)
+var reAttrFormat = regexp.MustCompile(`^((?:[^%]+|%%)*)(%(|-#?|#-?)(\d*)[.]?(\d*)s)?((?:[^%]+|%%)*)$`)
 
 func parseAttrFormat(s string) internal.AttrFormat {
 	ms := reAttrFormat.FindStringSubmatch(s)
@@ -214,7 +217,8 @@ func parseAttrFormat(s string) internal.AttrFormat {
 	af := internal.AttrFormat{
 		Prefix:     strings.ReplaceAll(ms[1], "%%", "%"),
 		Suffix:     strings.ReplaceAll(ms[6], "%%", "%"),
-		AlignRight: ms[3] == "",
+		AlignRight: !strings.Contains(ms[3], "-"),
+		Alternate:  strings.Contains(ms[3], "#"),
 		MinWidth:   0,
 		MaxWidth:   -1,
 	}

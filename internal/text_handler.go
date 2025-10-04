@@ -91,12 +91,12 @@ func (h *TextHandler) Handle(ctx context.Context, r Record) error {
 	return h.next.Handle(ctx, r)
 }
 
-func appendTextValue(s *handleState, v Value, format AttrFormat) error {
+func appendTextValue(s *handleState, key string, v Value, format AttrFormat) error {
 	switch v.Kind() {
 	case KindString:
 		s.appendString(v.String(), format)
 	case KindTime:
-		s.appendTime(v.Time())
+		s.appendTime(key, v.Time())
 	case KindAny:
 		if tm, ok := v.Any().(encoding.TextMarshaler); ok {
 			data, err := tm.MarshalText()

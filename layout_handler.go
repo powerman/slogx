@@ -126,6 +126,14 @@ type LayoutHandlerOptions struct {
 	// Keys not present in PrefixKeys and SuffixKeys are output as usual,
 	// between the message and the suffix keys, in order they were added.
 	SuffixKeys []string
+
+	// RecordTimeFormat specifies the time format for the built-in slog.TimeKey attribute
+	// instead of default (RFC3339 with millisecond precision).
+	RecordTimeFormat string
+
+	// TimeFormat specifies the time format for user-defined time.Time attributes
+	// instead of default (RFC3339 with millisecond precision).
+	TimeFormat string
 }
 
 // LayoutHandler is a handler that writes Records to an io.Writer in a text format
@@ -166,12 +174,14 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) slog.Handler {
 		opts = &LayoutHandlerOptions{}
 	}
 	o := &internal.LayoutHandlerOptions{
-		AddSource:   opts.AddSource,
-		Level:       opts.Level,
-		ReplaceAttr: opts.ReplaceAttr,
-		Format:      parseAttrFormatMap(opts.Format),
-		PrefixKeys:  opts.PrefixKeys,
-		SuffixKeys:  opts.SuffixKeys,
+		AddSource:        opts.AddSource,
+		Level:            opts.Level,
+		ReplaceAttr:      opts.ReplaceAttr,
+		Format:           parseAttrFormatMap(opts.Format),
+		PrefixKeys:       opts.PrefixKeys,
+		SuffixKeys:       opts.SuffixKeys,
+		RecordTimeFormat: opts.RecordTimeFormat,
+		TimeFormat:       opts.TimeFormat,
 	}
 	return &LayoutHandler{
 		next: internal.NewLayoutHandler(w, o),

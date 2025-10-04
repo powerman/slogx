@@ -125,6 +125,14 @@ type LayoutHandlerOptions struct {
 	// Keys not present in PrefixKeys and SuffixKeys are output as usual,
 	// between the message and the suffix keys, in order they were added.
 	SuffixKeys []string
+
+	// RecordTimeFormat specifies the time format for the built-in slog.TimeKey attribute
+	// instead of default (RFC3339 with millisecond precision).
+	RecordTimeFormat string
+
+	// TimeFormat specifies the time format for user-defined time.Time attributes
+	// instead of default (RFC3339 with millisecond precision).
+	TimeFormat string
 }
 
 type layoutAttrs [][]byte // index from prefix/suffix keys -> preformatted attr
@@ -295,7 +303,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 		val := r.Time.Round(0) // strip monotonic to match Attr behavior
 		if _, ok := h.opts.Format[key]; rep == nil && !ok {
 			state.appendKey(key)
-			state.appendTime(val)
+			state.appendTime(key, val)
 		} else {
 			state.appendAttr(Time(key, val))
 		}
@@ -535,7 +543,7 @@ func (s *handleState) appendAttr(a Attr) {
 			s.appendFormat(format, key, a.Value)
 		} else {
 			s.appendKey(key)
-			s.appendValue(a.Value, noFormat)
+			s.appendValue(key, a.Value, noFormat)
 		}
 
 		if layoutBuf != nil {
@@ -562,7 +570,7 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 	case (format.MinWidth > 0 || format.MaxWidth > 0) && key == TimeKey:
 		if t, ok := v.Any().(time.Time); ok {
 			pos := s.buf.Len()
-			s.appendTime(t)
+			s.appendTime(key, t)
 			start := min(s.buf.Len(), pos+format.MinWidth)
 			end := min(s.buf.Len(), start+format.MaxWidth)
 			if format.MaxWidth == -1 {
@@ -573,7 +581,7 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 			}
 			s.buf.SetLen(pos + (end - start))
 		} else {
-			s.appendFormatValue(format, v)
+			s.appendFormatValue(key, v, format)
 		}
 
 	// Special case: short level for "%3.3s" format of LevelKey.
@@ -581,11 +589,11 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 		if l, ok := v.Any().(Level); ok {
 			s.buf.WriteString(shortLevel(l))
 		} else {
-			s.appendFormatValue(format, v)
+			s.appendFormatValue(key, v, format)
 		}
 
 	case format.MaxWidth != 0:
-		s.appendFormatValue(format, v)
+		s.appendFormatValue(key, v, format)
 
 	case format.MinWidth > 0:
 		for range format.MinWidth {
@@ -604,9 +612,9 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 	}
 }
 
-func (s *handleState) appendFormatValue(format AttrFormat, v Value) {
+func (s *handleState) appendFormatValue(key string, v Value, format AttrFormat) {
 	pos := s.buf.Len()
-	s.appendValue(v, format)
+	s.appendValue(key, v, format)
 	// Count runes in the appended value up to max amount needed for next checks.
 	n := 0
 	// Detect quoted values to close the quote after truncation.
@@ -732,7 +740,7 @@ func (s *handleState) appendString(str string, format AttrFormat) {
 	}
 }
 
-func (s *handleState) appendValue(v Value, format AttrFormat) {
+func (s *handleState) appendValue(key string, v Value, format AttrFormat) {
 	defer func() {
 		if r := recover(); r != nil {
 			// If it panics with a nil pointer, the most likely cases are
@@ -750,14 +758,21 @@ func (s *handleState) appendValue(v Value, format AttrFormat) {
 		}
 	}()
 
-	err := appendTextValue(s, v, format)
+	err := appendTextValue(s, key, v, format)
 	if err != nil {
 		s.appendError(err)
 	}
 }
 
-func (s *handleState) appendTime(t time.Time) {
-	*s.buf = appendRFC3339Millis(*s.buf, t)
+func (s *handleState) appendTime(key string, t time.Time) {
+	switch {
+	case key == TimeKey && s.h.opts.RecordTimeFormat != "":
+		s.buf.WriteString(t.Format(s.h.opts.RecordTimeFormat))
+	case key != TimeKey && s.h.opts.TimeFormat != "":
+		s.buf.WriteString(t.Format(s.h.opts.TimeFormat))
+	default:
+		*s.buf = appendRFC3339Millis(*s.buf, t)
+	}
 }
 
 func appendRFC3339Millis(b []byte, t time.Time) []byte {

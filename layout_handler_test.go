@@ -992,6 +992,66 @@ func optsFormatToReplaceAttr(opts slogx.LayoutHandlerOptions) slogx.LayoutHandle
 	}
 }
 
+func TestLayoutHandler_TimeFormat(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var buf bytes.Buffer
+
+	tests := []struct {
+		recordTimeFormat string
+		timeFormat       string
+		want             string
+	}{
+		{
+			"", "",
+			"time=2006-01-02T15:04:05.789+01:00 t=2006-01-02T15:04:05.789+01:00",
+		},
+		{
+			time.RFC3339, "",
+			"time=2006-01-02T15:04:05+01:00 t=2006-01-02T15:04:05.789+01:00",
+		},
+		{
+			"", time.RFC3339,
+			"time=2006-01-02T15:04:05.789+01:00 t=2006-01-02T15:04:05+01:00",
+		},
+		{
+			time.RFC3339, time.RFC3339,
+			"time=2006-01-02T15:04:05+01:00 t=2006-01-02T15:04:05+01:00",
+		},
+		{
+			time.RFC3339Nano, time.Kitchen,
+			"time=2006-01-02T15:04:05.789123456+01:00 t=3:04PM",
+		},
+		{
+			time.DateOnly, time.TimeOnly,
+			"time=2006-01-02 t=15:04:05",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%s %s", tc.recordTimeFormat, tc.timeFormat), func(tt *testing.T) {
+			t := check.T(tt)
+			buf.Reset()
+			now, _ := time.Parse(time.RFC3339Nano, "2006-01-02T15:04:05.789123456+01:00")
+			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+				Format: map[string]string{
+					slog.LevelKey:   "",
+					slog.MessageKey: "",
+				},
+				RecordTimeFormat: tc.recordTimeFormat,
+				TimeFormat:       tc.timeFormat,
+				ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+					if a.Key == slog.TimeKey && len(groups) == 0 {
+						a.Value = slog.TimeValue(now)
+					}
+					return a
+				},
+			}))
+			logger.Info("test", "t", now)
+			t.Equal(buf.String(), tc.want+"\n")
+		})
+	}
+}
+
 func BenchmarkLayout(b *testing.B) {
 	opts := slogx.LayoutHandlerOptions{
 		Format: map[string]string{

@@ -91,10 +91,10 @@ func (h *TextHandler) Handle(ctx context.Context, r Record) error {
 	return h.next.Handle(ctx, r)
 }
 
-func appendTextValue(s *handleState, v Value) error {
+func appendTextValue(s *handleState, v Value, format AttrFormat) error {
 	switch v.Kind() {
 	case KindString:
-		s.appendString(v.String())
+		s.appendString(v.String(), format)
 	case KindTime:
 		s.appendTime(v.Time())
 	case KindAny:
@@ -104,15 +104,19 @@ func appendTextValue(s *handleState, v Value) error {
 				return err
 			}
 			// TODO: avoid the conversion to string.
-			s.appendString(string(data))
+			s.appendString(string(data), format)
 			return nil
 		}
 		if bs, ok := byteSlice(v.Any()); ok {
 			// As of Go 1.19, this only allocates for strings longer than 32 bytes.
-			s.buf.WriteString(strconv.Quote(string(bs)))
+			if format.SkipQuote {
+				s.buf.WriteString(string(bs))
+			} else {
+				s.buf.WriteString(strconv.Quote(string(bs)))
+			}
 			return nil
 		}
-		s.appendString(fmt.Sprintf("%+v", v.Any()))
+		s.appendString(fmt.Sprintf("%+v", v.Any()), format)
 	default:
 		*s.buf = appendValue(v, *s.buf)
 	}

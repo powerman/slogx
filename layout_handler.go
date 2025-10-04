@@ -65,8 +65,10 @@ type LayoutHandlerOptions struct {
 	//
 	// Use empty string value for a key to remove the attr from output.
 	//
-	// The format is a subset of the formats supported by fmt package:
-	// - single '%s' with optional flags, minimum and maximum width for value
+	// The format is mostly a subset (just one extension) of the fmt package formats:
+	// - single '%v' or '%s' with optional flags, minimum and maximum width for value
+	//   - '%v' for default slog.TextHandler formatting (with quoting as needed)
+	//   - '%s' for slog.TextHandler formatting without quoting
 	// - flag '-' for left alignment (default is right alignment)
 	// - flag '#' for truncating value from the beginning instead of the end
 	// - '%%' for a '%'
@@ -75,19 +77,19 @@ type LayoutHandlerOptions struct {
 	// %s is an attr's value quoted and formatted in same way as used by TextHandler.
 	//
 	// Examples:
-	//   "%-5s"          - only value without attr separator, left aligned, minimum width 5
-	//   " %10s"         - only value, right aligned, minimum width 10
-	//   " %.10s"        - only value, maximum width 10 (output is truncated if longer)
-	//   " %#.10s"       - same as above, but value is truncated from the beginning
-	//   " key=%-10.8s"  - left aligned, min width 10, max width 8 (right padded 2+ spaces)
-	//   " group.key=%s" - when used for key "group.key" will result in default output
+	//   "%-5v"          - only value without attr separator, left aligned, minimum width 5
+	//   " %10v"         - only value, right aligned, minimum width 10
+	//   " %.10v"        - only value, maximum width 10 (output is truncated if longer)
+	//   " %#.10v"       - same as above, but value is truncated from the beginning
+	//   " key=%-10.8v"  - left aligned, min width 10, max width 8 (right padded 2+ spaces)
+	//   " group.key=%v" - when used for key "group.key" will result in default output
 	//                     (but always with a space prefix even if it's the first attribute)
 	//   " pass=REDACTED"- when used for key "pass" will hide the actual value
 	//   ""              - attribute is removed from output
 	//
 	// Special cases:
 	// - For slog.TimeKey minimum and maximum width means substring offset and length:
-	//  "%11.12s" will output "15:04:05.999", "%.10s" will output "2006-01-02".
+	//  "%11.12v" will output "15:04:05.999", "%.10v" will output "2006-01-02".
 	// - For slog.LevelKey minimum=3 and maximum=3 will result in short level names:
 	//   "DBG", "INF", "WRN", "ERR", "D±n", "I+n", "W+n", "E+n".
 	//
@@ -206,7 +208,7 @@ func parseAttrFormatMap(m map[string]string) map[string]internal.AttrFormat {
 	return af
 }
 
-var reAttrFormat = regexp.MustCompile(`^((?:[^%]+|%%)*)(%(|-#?|#-?)(\d*)[.]?(\d*)s)?((?:[^%]+|%%)*)$`)
+var reAttrFormat = regexp.MustCompile(`^((?:[^%]+|%%)*)(%(|-#?|#-?)(\d*)[.]?(\d*)([vs]))?((?:[^%]+|%%)*)$`)
 
 func parseAttrFormat(s string) internal.AttrFormat {
 	ms := reAttrFormat.FindStringSubmatch(s)
@@ -216,11 +218,12 @@ func parseAttrFormat(s string) internal.AttrFormat {
 
 	af := internal.AttrFormat{
 		Prefix:     strings.ReplaceAll(ms[1], "%%", "%"),
-		Suffix:     strings.ReplaceAll(ms[6], "%%", "%"),
-		AlignRight: !strings.Contains(ms[3], "-"),
-		Alternate:  strings.Contains(ms[3], "#"),
+		Suffix:     strings.ReplaceAll(ms[7], "%%", "%"),
 		MinWidth:   0,
 		MaxWidth:   -1,
+		AlignRight: !strings.Contains(ms[3], "-"),
+		Alternate:  strings.Contains(ms[3], "#"),
+		SkipQuote:  ms[6] == "s",
 	}
 
 	var err error
@@ -238,7 +241,7 @@ func parseAttrFormat(s string) internal.AttrFormat {
 	}
 
 	if ms[2] == "" {
-		af.MaxWidth = 0 // No %s verb means no value output.
+		af.MaxWidth = 0 // No %v or %s verb means no value output.
 	}
 
 	return af

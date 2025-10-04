@@ -42,7 +42,10 @@ type AttrFormat struct {
 	MaxWidth   int    // Maximum width of the attr value. -1 means no limit. 0 means no value.
 	AlignRight bool
 	Alternate  bool // MaxWidth cuts from the end, not from the beginning.
+	SkipQuote  bool // Do not quote the value, even if needed.
 }
+
+var noFormat = AttrFormat{MaxWidth: -1}
 
 type LayoutHandlerOptions struct {
 	// AddSource causes the handler to compute the source code position
@@ -302,7 +305,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	val := r.Level
 	if _, ok := h.opts.Format[key]; rep == nil && !ok {
 		state.appendKey(key)
-		state.appendString(val.String())
+		state.appendString(val.String(), noFormat)
 	} else {
 		state.appendAttr(Any(key, val))
 	}
@@ -324,7 +327,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	msg := r.Message
 	if _, ok := h.opts.Format[key]; rep == nil && !ok {
 		state.appendKey(key)
-		state.appendString(msg)
+		state.appendString(msg, noFormat)
 	} else {
 		state.appendAttr(String(key, msg))
 	}
@@ -532,7 +535,7 @@ func (s *handleState) appendAttr(a Attr) {
 			s.appendFormat(format, key, a.Value)
 		} else {
 			s.appendKey(key)
-			s.appendValue(a.Value)
+			s.appendValue(a.Value, noFormat)
 		}
 
 		if layoutBuf != nil {
@@ -598,7 +601,7 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 
 func (s *handleState) appendFormatValue(format AttrFormat, v Value) {
 	pos := s.buf.Len()
-	s.appendValue(v)
+	s.appendValue(v, format)
 	// Count runes in the appended value up to max amount needed for next checks.
 	n := 0
 	// Detect quoted values to close the quote after truncation.
@@ -700,7 +703,7 @@ func (s *handleState) appendFormatValue(format AttrFormat, v Value) {
 }
 
 func (s *handleState) appendError(err error) {
-	s.appendString(fmt.Sprintf("!ERROR:%v", err))
+	s.appendString(fmt.Sprintf("!ERROR:%v", err), noFormat)
 }
 
 func (s *handleState) appendKey(key string) {
@@ -712,19 +715,19 @@ func (s *handleState) appendKey(key string) {
 	} else if s.bufStart == sepNone {
 		s.bufStart = sepSkipped
 	}
-	s.appendString(key)
+	s.appendString(key, noFormat)
 	s.buf.WriteByte('=')
 }
 
-func (s *handleState) appendString(str string) {
-	if needsQuoting(str) {
+func (s *handleState) appendString(str string, format AttrFormat) {
+	if !format.SkipQuote && needsQuoting(str) {
 		*s.buf = strconv.AppendQuote(*s.buf, str)
 	} else {
 		s.buf.WriteString(str)
 	}
 }
 
-func (s *handleState) appendValue(v Value) {
+func (s *handleState) appendValue(v Value, format AttrFormat) {
 	defer func() {
 		if r := recover(); r != nil {
 			// If it panics with a nil pointer, the most likely cases are
@@ -733,16 +736,16 @@ func (s *handleState) appendValue(v Value) {
 			//
 			// Adapted from the code in fmt/print.go.
 			if v := reflect.ValueOf(v.Any()); v.Kind() == reflect.Pointer && v.IsNil() {
-				s.appendString("<nil>")
+				s.appendString("<nil>", noFormat)
 				return
 			}
 
 			// Otherwise just print the original panic message.
-			s.appendString(fmt.Sprintf("!PANIC: %v", r))
+			s.appendString(fmt.Sprintf("!PANIC: %v", r), noFormat)
 		}
 	}()
 
-	err := appendTextValue(s, v)
+	err := appendTextValue(s, v, format)
 	if err != nil {
 		s.appendError(err)
 	}

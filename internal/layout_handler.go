@@ -586,6 +586,11 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 
 	case format.MaxWidth != 0:
 		s.appendFormatValue(format, v)
+
+	case format.MinWidth > 0:
+		for range format.MinWidth {
+			s.buf.WriteByte(' ')
+		}
 	}
 
 	if format.Suffix != "" {
@@ -593,7 +598,7 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 	}
 
 	if s.bufStart == sepNone {
-		if format.Prefix != "" || format.MaxWidth != 0 || format.Suffix != "" {
+		if format.Prefix != "" || format.MinWidth > 0 || format.MaxWidth != 0 || format.Suffix != "" {
 			s.bufStart = sepIncluded
 		}
 	}

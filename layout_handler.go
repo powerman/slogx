@@ -208,7 +208,7 @@ func parseAttrFormatMap(m map[string]string) map[string]internal.AttrFormat {
 	return af
 }
 
-var reAttrFormat = regexp.MustCompile(`^((?:[^%]+|%%)*)(%(|-#?|#-?)(\d*)[.]?(\d*)([vs]))?((?:[^%]+|%%)*)$`)
+var reAttrFormat = regexp.MustCompile(`^((?:[^%]+|%%)*)(%(|-#?|#-?)(\d*)([.](\d*))?([vs]))?((?:[^%]+|%%)*)$`)
 
 func parseAttrFormat(s string) internal.AttrFormat {
 	ms := reAttrFormat.FindStringSubmatch(s)
@@ -218,12 +218,12 @@ func parseAttrFormat(s string) internal.AttrFormat {
 
 	af := internal.AttrFormat{
 		Prefix:     strings.ReplaceAll(ms[1], "%%", "%"),
-		Suffix:     strings.ReplaceAll(ms[7], "%%", "%"),
+		Suffix:     strings.ReplaceAll(ms[8], "%%", "%"),
 		MinWidth:   0,
 		MaxWidth:   -1,
 		AlignRight: !strings.Contains(ms[3], "-"),
 		Alternate:  strings.Contains(ms[3], "#"),
-		SkipQuote:  ms[6] == "s",
+		SkipQuote:  ms[7] == "s",
 	}
 
 	var err error
@@ -234,7 +234,10 @@ func parseAttrFormat(s string) internal.AttrFormat {
 		}
 	}
 	if ms[5] != "" {
-		af.MaxWidth, err = strconv.Atoi(ms[5])
+		af.MaxWidth = 0 // MaxWidth present without value means 0.
+	}
+	if ms[6] != "" {
+		af.MaxWidth, err = strconv.Atoi(ms[6])
 		if err != nil {
 			panic("slogx: invalid attr format (max width): " + s)
 		}

@@ -36,13 +36,13 @@ const attrSep = ' '
 //     starting at MinWidth position with length up to MaxWidth.
 //   - LevelKey with MinWidth=3 and MaxWidth=3 outputs short level string (e.g. "WRN").
 type AttrFormat struct {
-	Prefix     string // Printed instead of attr key.
-	Suffix     string // Printed after the attr value.
-	MinWidth   int    // Minimum width of the attr value.
-	MaxWidth   int    // Maximum width of the attr value. -1 means no limit. 0 means no value.
-	AlignRight bool
-	Alternate  bool // MaxWidth cuts from the end, not from the beginning.
-	SkipQuote  bool // Do not quote the value, even if needed.
+	Prefix         string // Printed instead of attr key.
+	Suffix         string // Printed after the attr value.
+	MinWidth       int    // Minimum width of the attr value.
+	MaxWidth       int    // Maximum width of the attr value. -1 means no limit. 0 means no value.
+	AlignRight     bool   // MinWidth padding added to the left.
+	TruncFromStart bool   // MaxWidth truncate from the beginning.
+	SkipQuote      bool   // Do not quote the value, even if needed.
 }
 
 var noFormat = AttrFormat{MaxWidth: -1}
@@ -622,10 +622,10 @@ func (s *handleState) appendFormatValue(format AttrFormat, v Value) {
 	startPos := pos
 	if nMax := max(format.MinWidth, format.MaxWidth); nMax > 0 {
 		var sizes []int // Ring buffer of rune sizes for Alternate.
-		if format.Alternate && format.MaxWidth > 0 {
+		if format.TruncFromStart && format.MaxWidth > 0 {
 			sizes = make([]int, format.MaxWidth)
 		}
-		for i := pos; i < s.buf.Len() && (n <= nMax || format.Alternate); {
+		for i := pos; i < s.buf.Len() && (n <= nMax || format.TruncFromStart); {
 			_, size := utf8.DecodeRune((*s.buf)[i:])
 			i += size
 			n++
@@ -651,7 +651,7 @@ func (s *handleState) appendFormatValue(format AttrFormat, v Value) {
 		}
 	}
 	if w := format.MaxWidth; w > 0 && n > w {
-		if format.Alternate {
+		if format.TruncFromStart {
 			switch {
 			case w == 1:
 				s.buf.SetLen(pos)

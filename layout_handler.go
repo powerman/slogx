@@ -70,7 +70,8 @@ type LayoutHandlerOptions struct {
 	//   - '%v' for default slog.TextHandler formatting (with quoting as needed)
 	//   - '%s' for slog.TextHandler formatting without quoting
 	// - flag '-' for left alignment (default is right alignment)
-	// - flag '#' for truncating value from the beginning instead of the end
+	// - negative maximum width for truncating value from the beginning instead of the end
+	//   (this is the only extension beyond fmt formats: accepting '-' after '.')
 	// - '%%' for a '%'
 	// - other characters are output verbatim
 	//
@@ -80,7 +81,7 @@ type LayoutHandlerOptions struct {
 	//   "%-5v"          - only value without attr separator, left aligned, minimum width 5
 	//   " %10v"         - only value, right aligned, minimum width 10
 	//   " %.10v"        - only value, maximum width 10 (output is truncated if longer)
-	//   " %#.10v"       - same as above, but value is truncated from the beginning
+	//   " %.-10v"       - same as above, but value is truncated from the beginning
 	//   " key=%-10.8v"  - left aligned, min width 10, max width 8 (right padded 2+ spaces)
 	//   " group.key=%v" - when used for key "group.key" will result in default output
 	//                     (but always with a space prefix even if it's the first attribute)
@@ -208,42 +209,52 @@ func parseAttrFormatMap(m map[string]string) map[string]internal.AttrFormat {
 	return af
 }
 
-var reAttrFormat = regexp.MustCompile(`^((?:[^%]+|%%)*)(%(|-#?|#-?)(\d*)([.](\d*))?([vs]))?((?:[^%]+|%%)*)$`)
+var reAttrFormat = regexp.MustCompile(`^((?:[^%]+|%%)*)(%(-?)(\d*)([.](-?)(\d*))?([vs]))?((?:[^%]+|%%)*)$`)
 
 func parseAttrFormat(s string) internal.AttrFormat {
 	ms := reAttrFormat.FindStringSubmatch(s)
 	if ms == nil {
 		panic("slogx: invalid attr format: " + s)
 	}
+	var (
+		prefix         = ms[1]
+		hasVerb        = ms[2] != ""
+		alignLeft      = ms[3] == "-"
+		minWidth       = ms[4]
+		hasMaxWidth    = ms[5] != ""
+		truncFromStart = ms[6] == "-"
+		maxWidth       = ms[7]
+		verb           = ms[8]
+		suffix         = ms[9]
+	)
 
 	af := internal.AttrFormat{
-		Prefix:     strings.ReplaceAll(ms[1], "%%", "%"),
-		Suffix:     strings.ReplaceAll(ms[8], "%%", "%"),
-		MinWidth:   0,
-		MaxWidth:   -1,
-		AlignRight: !strings.Contains(ms[3], "-"),
-		Alternate:  strings.Contains(ms[3], "#"),
-		SkipQuote:  ms[7] == "s",
+		Prefix:         strings.ReplaceAll(prefix, "%%", "%"),
+		Suffix:         strings.ReplaceAll(suffix, "%%", "%"),
+		MinWidth:       0,
+		MaxWidth:       -1,
+		AlignRight:     !alignLeft,
+		TruncFromStart: truncFromStart,
+		SkipQuote:      verb == "s",
 	}
 
 	var err error
-	if ms[4] != "" {
-		af.MinWidth, err = strconv.Atoi(ms[4])
+	if minWidth != "" {
+		af.MinWidth, err = strconv.Atoi(minWidth)
 		if err != nil {
 			panic("slogx: invalid attr format (min width): " + s)
 		}
 	}
-	if ms[5] != "" {
+	if hasMaxWidth {
 		af.MaxWidth = 0 // MaxWidth present without value means 0.
 	}
-	if ms[6] != "" {
-		af.MaxWidth, err = strconv.Atoi(ms[6])
+	if maxWidth != "" {
+		af.MaxWidth, err = strconv.Atoi(maxWidth)
 		if err != nil {
 			panic("slogx: invalid attr format (max width): " + s)
 		}
 	}
-
-	if ms[2] == "" {
+	if !hasVerb {
 		af.MaxWidth = 0 // No %v or %s verb means no value output.
 	}
 

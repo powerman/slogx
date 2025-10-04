@@ -905,7 +905,7 @@ func optsFormatToReplaceAttr(opts slogx.LayoutHandlerOptions) slogx.LayoutHandle
 	}
 }
 
-func BenchmarkLayoutHandler(b *testing.B) {
+func BenchmarkLayout(b *testing.B) {
 	opts := slogx.LayoutHandlerOptions{
 		Format: map[string]string{
 			slog.LevelKey: " %-5s",
@@ -959,9 +959,9 @@ func BenchmarkLayoutHandler(b *testing.B) {
 		name string
 		h    slog.Handler
 	}{
-		{"Layout", slogx.NewLayoutHandler(io.Discard, &opts)},
-		{"Text", slog.NewTextHandler(io.Discard, nil)}, //nolint:sloglint // Benchmark.
-		{"JSON", slog.NewJSONHandler(io.Discard, nil)}, //nolint:sloglint // Benchmark.
+		{"all-opts", slogx.NewLayoutHandler(io.Discard, &opts)},
+		{"no-opts", slogx.NewLayoutHandler(io.Discard, nil)},
+		{"std-text", slog.NewTextHandler(io.Discard, nil)}, //nolint:sloglint // Benchmark.
 	} {
 		logger := slog.New(handler.h)
 		b.Run(handler.name, func(b *testing.B) {
@@ -969,10 +969,10 @@ func BenchmarkLayoutHandler(b *testing.B) {
 				name string
 				f    func()
 			}{
-				{"just msg", func() {
+				{"msg", func() {
 					logger.Info("test")
 				}},
-				{"handle http request", func() {
+				{"http", func() {
 					logger2 := logger.
 						// set in main()
 						With("app", "myapp").

@@ -34,8 +34,7 @@ import (
 //   - Output bare values without "key=" and/or attribute separator.
 //     This allows more compact output for attributes which meaning is obvious
 //     from their value or position (e.g. time, level, HTTP method, host:port, etc).
-//   - Compact output for built-in attributes time and level
-//     by using time substring and short level names.
+//   - Compact output for built-in attribute level by using short level names.
 //   - Disable quoting to avoid cluttering the output with extra escaping backslashes
 //     when the value is already in a safe format (e.g. JSON, Go syntax, etc).
 //     This should be used with care to avoid misleading output.
@@ -131,8 +130,6 @@ type LayoutHandlerOptions struct {
 	//   "\n%s"	     - unquoted multiline value starting on a new line
 	//
 	// Special cases:
-	// - For slog.TimeKey minimum and maximum width means substring offset and length:
-	//  "%11.12v" will output "15:04:05.999", "%.10v" will output "2006-01-02".
 	// - For slog.LevelKey minimum=3 and maximum=3 will result in short level names:
 	//   "DBG", "INF", "WRN", "ERR", "D±n", "I+n", "W+n", "E+n".
 	//

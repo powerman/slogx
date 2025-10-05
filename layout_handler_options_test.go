@@ -26,29 +26,6 @@ func ExampleLayoutHandlerOptions_formatRemoveAttr() {
 	// level=INFO msg="Test message"
 }
 
-func ExampleLayoutHandlerOptions_formatTimeSubstring() {
-	now, _ := time.Parse(time.RFC3339Nano, "2006-01-02T15:04:05.789123456+01:00")
-	setRecordTime := func(groups []string, a slog.Attr) slog.Attr {
-		if a.Key == slog.TimeKey && len(groups) == 0 {
-			a.Value = slog.TimeValue(now)
-		}
-		return a
-	}
-
-	// This example demonstrates how to use the LayoutHandlerOptions to customize
-	// the log output format by shortening the time field to show only hours and minutes.
-	opts := slogx.LayoutHandlerOptions{
-		ReplaceAttr: setRecordTime, // Fix time for the example output.
-		Format: map[string]string{
-			slog.TimeKey: "time=%11.5v", // Skip 11 characters, then take 5.
-		},
-	}
-	logger := slog.New(slogx.NewLayoutHandler(os.Stdout, &opts))
-	logger.Info("Test message")
-	// Output:
-	// time=15:04 level=INFO msg="Test message"
-}
-
 func ExampleLayoutHandlerOptions_formatShortenLevel() {
 	// This example demonstrates how to use the LayoutHandlerOptions to customize
 	// the log output format by shortening the level field to 3 characters.

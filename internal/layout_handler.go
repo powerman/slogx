@@ -32,8 +32,6 @@ const attrSep = ' '
 // Zero value results in outputting nothing, same as removing the attr using ReplaceAttr.
 //
 // Special cases:
-//   - TimeKey with MinWidth > 0 and/or MaxWidth > 0 outputs time substring
-//     starting at MinWidth position with length up to MaxWidth.
 //   - LevelKey with MinWidth=3 and MaxWidth=3 outputs short level string (e.g. "WRN").
 type AttrFormat struct {
 	Prefix         string // Printed instead of attr key.
@@ -568,24 +566,6 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 	}
 
 	switch {
-	// Special case: time substring for "%O.Ls" format of TimeKey.
-	case (format.MinWidth > 0 || format.MaxWidth > 0) && key == TimeKey:
-		if t, ok := v.Any().(time.Time); ok {
-			pos := s.buf.Len()
-			s.appendTime(key, t)
-			start := min(s.buf.Len(), pos+format.MinWidth)
-			end := min(s.buf.Len(), start+format.MaxWidth)
-			if format.MaxWidth == -1 {
-				end = s.buf.Len()
-			}
-			if pos < start {
-				copy((*s.buf)[pos:], (*s.buf)[start:end])
-			}
-			s.buf.SetLen(pos + (end - start))
-		} else {
-			s.appendFormatValue(key, v, format)
-		}
-
 	// Special case: short level for "%3.3s" format of LevelKey.
 	case format.MinWidth == 3 && format.MaxWidth == 3 && key == LevelKey:
 		if l, ok := v.Any().(Level); ok {

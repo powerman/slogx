@@ -1010,17 +1010,17 @@ func TestLayoutHandler_TimeFormat(tt *testing.T) {
 			buf.Reset()
 			now, _ := time.Parse(time.RFC3339Nano, "2006-01-02T15:04:05.789123456+01:00")
 			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
-				Format: map[string]string{
-					slog.LevelKey:   "",
-					slog.MessageKey: "",
-				},
-				RecordTimeFormat: tc.recordTimeFormat,
-				TimeFormat:       tc.timeFormat,
 				ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 					if a.Key == slog.TimeKey && len(groups) == 0 {
 						a.Value = slog.TimeValue(now)
 					}
 					return a
+				},
+				RecordTimeFormat: tc.recordTimeFormat,
+				TimeFormat:       tc.timeFormat,
+				Format: map[string]string{
+					slog.LevelKey:   "",
+					slog.MessageKey: "",
 				},
 			}))
 			logger.Info("test", "t", now)

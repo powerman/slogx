@@ -84,6 +84,14 @@ type LayoutHandlerOptions struct {
 	// remove attributes from the output.
 	ReplaceAttr func(groups []string, a Attr) Attr
 
+	// RecordTimeFormat specifies the time format for the built-in slog.TimeKey attribute
+	// instead of default (RFC3339 with millisecond precision).
+	RecordTimeFormat string
+
+	// TimeFormat specifies the time format for user-defined time.Time attributes
+	// instead of default (RFC3339 with millisecond precision).
+	TimeFormat string
+
 	// Format specifies per-attribute formatting options.
 	//
 	// If an attribute's key is present in the map,
@@ -125,14 +133,6 @@ type LayoutHandlerOptions struct {
 	// Keys not present in PrefixKeys and SuffixKeys are output as usual,
 	// between the message and the suffix keys, in order they were added.
 	SuffixKeys []string
-
-	// RecordTimeFormat specifies the time format for the built-in slog.TimeKey attribute
-	// instead of default (RFC3339 with millisecond precision).
-	RecordTimeFormat string
-
-	// TimeFormat specifies the time format for user-defined time.Time attributes
-	// instead of default (RFC3339 with millisecond precision).
-	TimeFormat string
 }
 
 type layoutAttrs [][]byte // index from prefix/suffix keys -> preformatted attr

@@ -88,20 +88,21 @@ type LayoutHandlerOptions struct {
 
 	// Format specifies per-attribute formatting options.
 	//
-	// If an attribute's key is present in the map, the corresponding
-	// formatting options are applied when outputting the attribute,
-	// otherwise the attribute is output in the default TextHandler format.
+	// If an attribute's key is present in the map,
+	// the corresponding formatting options are applied when outputting the attribute,
+	// otherwise the attribute is output in the default slog.TextHandler format.
 	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
-	// All attributes included in Format are output without attrSep (' '), key and '='.
-	// Include these parts in AttrFormat.Prefix as needed.
+	// All attributes included in Format are output without attribute separator (' '),
+	// key and '='. Include these parts in format as prefix if needed.
 	//
-	// Use zero AttrFormat value for a key to remove the attr from output.
+	// Use zero AttrFormat value to remove the attr from output.
 	Format map[string]AttrFormat
 
 	// PrefixKeys specifies keys that, if present, output just before the message key,
 	// in order given by the slice.
+	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
 	// If multiple attributes have the same key only the last one is output.
@@ -115,6 +116,7 @@ type LayoutHandlerOptions struct {
 
 	// SuffixKeys specifies keys that, if present, output after all other attributes,
 	// in order given by the slice.
+	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
 	// If multiple attributes have the same key only the last one is output.

@@ -11,7 +11,46 @@ import (
 	"github.com/powerman/slogx/internal"
 )
 
-// LayoutHandlerOptions contains options for NewLayoutHandler.
+// LayoutHandlerOptions contains options for [NewLayoutHandler].
+// These options extend [slog.HandlerOptions] to define output layout
+// by controlling attributes order and formatting.
+//
+// PrefixKeys and SuffixKeys makes it possible to reorder attributes
+// (including built-in attributes except [slog.MessageKey]) to appear
+// right before message or at the end of the output respectively,
+// in the fixed order defined by these slices.
+//
+// Format makes it possible to:
+//
+//   - Remove attribute from output (including built-in attributes).
+//     This is more convenient than using ReplaceAttr for this purpose.
+//   - Hide sensitive attribute value (e.g. secret).
+//     This can be used as an additional layer of protection besides [slog.LogValuer]
+//     and ReplaceAttr. Unlike removing the attribute, it makes possible to notice
+//     the attempt to log the sensitive value without exposing the actual value.
+//   - Ensure vertical alignment for attributes output before message
+//     by adding padding to the left or right of the value
+//     and truncating value from the end or the beginning.
+//   - Output bare values without "key=" and/or attribute separator.
+//     This allows more compact output for attributes which meaning is obvious
+//     from their value or position (e.g. time, level, HTTP method, host:port, etc).
+//   - Compact output for built-in attributes time and level
+//     by using time substring and short level names.
+//   - Disable quoting to avoid cluttering the output with extra escaping backslashes
+//     when the value is already in a safe format (e.g. JSON, Go syntax, etc).
+//     This should be used with care to avoid misleading output.
+//   - Disable quoting to output multiline values (e.g. stack traces, JSON, Go syntax, etc).
+//     This should be used with care to avoid misleading output.
+//   - Add custom prefix/suffix to attribute value (ANSI colors, brackets, etc).
+//
+// Here is an example configuration which ensures vertical alignment for message:
+//
+//	Format: map[string]string{
+//		slog.LevelKey: " level=%3.3s", // Use alternative short level names.
+//	},
+//	SuffixKeys: []string{
+//		slog.SourceKey, // Can be truncated and padded instead of moving to the end.
+//	},
 type LayoutHandlerOptions struct {
 	// AddSource causes the handler to compute the source code position
 	// of the log statement and add a SourceKey attribute to the output.
@@ -53,31 +92,33 @@ type LayoutHandlerOptions struct {
 
 	// Format specifies per-attribute formatting options.
 	//
-	// If an attribute's key is present in the map, the corresponding
-	// formatting options are applied when outputting the attribute,
-	// otherwise the attribute is output in the default TextHandler format.
+	// If an attribute's key is present in the map,
+	// the corresponding formatting options are applied when outputting the attribute,
+	// otherwise the attribute is output in the default slog.TextHandler format.
 	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
 	// All attributes included in Format are output without attribute separator (' '),
-	// key and '='.
-	// Include these parts in format as prefix if needed.
+	// key and '='. Include these parts in format as prefix if needed.
 	//
-	// Use empty string value for a key to remove the attr from output.
+	// Use empty string format to remove the attr from output.
+	// Use format without %v or %s verb to hide the actual value.
 	//
 	// The format is mostly a subset (just one extension) of the fmt package formats:
-	// - single '%v' or '%s' with optional flags, minimum and maximum width for value
-	//   - '%v' for default slog.TextHandler formatting (with quoting as needed)
-	//   - '%s' for slog.TextHandler formatting without quoting
-	// - flag '-' for left alignment (default is right alignment)
-	// - negative maximum width for truncating value from the beginning instead of the end
-	//   (this is the only extension beyond fmt formats: accepting '-' after '.')
-	// - '%%' for a '%'
-	// - other characters are output verbatim
 	//
-	// %s is an attr's value quoted and formatted in same way as used by TextHandler.
+	//   - Single '%v' or '%s' verb with optional flags, minimum and maximum width.
+	//     - '%v' is value with default slog.TextHandler formatting (with quoting as needed).
+	//     - '%s' is value with slog.TextHandler formatting without quoting.
+	//   - Flag '-' for left alignment (default is right alignment).
+	//   - Minimum width for padding value with spaces.
+	//   - Positive maximum width for truncating value from the end if longer.
+	//   - Negative maximum width for truncating value from the beginning if longer.
+	//     (This is the only extension beyond fmt formats: accepting '-' after '.'.)
+	//   - '%%' for a '%'
+	//   - Other characters are output verbatim.
 	//
 	// Examples:
+	//
 	//   "%-5v"          - only value without attr separator, left aligned, minimum width 5
 	//   " %10v"         - only value, right aligned, minimum width 10
 	//   " %.10v"        - only value, maximum width 10 (output is truncated if longer)
@@ -87,6 +128,7 @@ type LayoutHandlerOptions struct {
 	//                     (but always with a space prefix even if it's the first attribute)
 	//   " pass=REDACTED"- when used for key "pass" will hide the actual value
 	//   ""              - attribute is removed from output
+	//   "\n%s"	     - unquoted multiline value starting on a new line
 	//
 	// Special cases:
 	// - For slog.TimeKey minimum and maximum width means substring offset and length:
@@ -103,6 +145,7 @@ type LayoutHandlerOptions struct {
 
 	// PrefixKeys specifies keys that, if present, output just before the message key,
 	// in order given by the slice.
+	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
 	// If multiple attributes have the same key only the last one is output.
@@ -116,6 +159,7 @@ type LayoutHandlerOptions struct {
 
 	// SuffixKeys specifies keys that, if present, output after all other attributes,
 	// in order given by the slice.
+	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
 	// If multiple attributes have the same key only the last one is output.
@@ -136,37 +180,20 @@ type LayoutHandlerOptions struct {
 	TimeFormat string
 }
 
-// LayoutHandler is a handler that writes Records to an io.Writer in a text format
-// designed for easy human reading.
+// LayoutHandler is a handler that writes Records to an [io.Writer] in a text format
+// designed for compact and easy to read output.
+//
+// It is a drop-in replacement for [slog.TextHandler] and implemented using modified
+// slog.TextHandler code, so it has exactly same behaviour and similar performance
+// when not using any of the extra options.
+//
+// To get improved output you should define order and formatting for some of the attributes
+// you use in your application (see [LayoutHandlerOptions] for details and examples).
 type LayoutHandler struct {
 	next slog.Handler
 }
 
 // NewLayoutHandler creates a new LayoutHandler that writes to w, using the given options.
-//
-// These options extend slog.HandlerOptions with extra options to define attrs layout by
-// controlling their order of attributes and their formatting.
-// If these extra options are not provided then the handler behaves exactly like slog.TextHandler.
-//
-// opts.PrefixKeys and opts.SuffixKeys make it possible to reorder attributes
-// (including built-in attributes except slog.MessageKey) to appear
-// before slog.MessageKey or at the end of the output respectively,
-// in the fixed order defined by these slices.
-//
-// opts.Format makes it possible to:
-// - Remove attributes from output (including built-in attributes).
-// - Hide sensitive attribute values (e.g. passwords).
-// - Ensure vertical alignment for PrefixKeys.
-// - Truncate long attribute values.
-// - Output bare values without "key=" and attribute separator.
-// - Add custom prefix/suffix to attribute value.
-//
-// Here is an example of minimal configuration which ensures vertical alignment for message:
-//
-//	Format: map[string]string{
-//		slog.LevelKey: " level=%3.3s", // short level with fixed width 3
-//	},
-//	SuffixKeys: []string{slog.SourceKey}, // source width is unknown, put it at the end
 //
 // NewLayoutHandler panics if opts.Format contains an invalid format.
 func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) slog.Handler {
@@ -188,22 +215,22 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) slog.Handler {
 	}
 }
 
-// Enabled implements slog.Handler interface.
+// Enabled implements [slog.Handler] interface.
 func (h *LayoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return h.next.Enabled(ctx, level)
 }
 
-// WithAttrs implements slog.Handler interface.
+// WithAttrs implements [slog.Handler] interface.
 func (h *LayoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &LayoutHandler{next: h.next.WithAttrs(attrs)}
 }
 
-// WithGroup implements slog.Handler interface.
+// WithGroup implements [slog.Handler] interface.
 func (h *LayoutHandler) WithGroup(name string) slog.Handler {
 	return &LayoutHandler{next: h.next.WithGroup(name)}
 }
 
-// Handle implements slog.Handler interface.
+// Handle implements [slog.Handler] interface.
 func (h *LayoutHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.next.Handle(ctx, r)
 }

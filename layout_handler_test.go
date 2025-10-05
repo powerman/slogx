@@ -774,6 +774,33 @@ func TestLayoutHandler_LayoutWith(tt *testing.T) {
 			},
 			`^ G.p=-2 p=-1 g.G2.p=-3 msg=Test g.g2.a=0 G.s=2 s=1 g.G2.s=3$`,
 		},
+		{
+			"parallel With",
+			func() {
+				logger1 := logger.With("p", "abcde", "s", "ABCDE", "a", "12345")
+				logger2 := logger.With("p", "xyz", "s", "XYZ", "a", "789")
+				logger1.Info("Test1")
+				logger2.Info("Test2")
+			},
+			`^` +
+				`p=abcde msg=Test1 a=12345 s=ABCDE\n` +
+				`p=xyz msg=Test2 a=789 s=XYZ$`,
+		},
+		{
+			"tree With",
+			func() {
+				logger1 := logger.With("p", -1, "s", 1, "a", 10)
+				logger2 := logger1.With("p", -2, "s", 2, "a", 20)
+				logger3 := logger1.With("p", -3, "s", 3, "a", 30)
+				logger1.Info("Test1")
+				logger2.Info("Test2")
+				logger3.Info("Test3")
+			},
+			`^` +
+				`p=-1 msg=Test1 a=10 s=1\n` +
+				`p=-2 msg=Test2 a=10 a=20 s=2\n` +
+				`p=-3 msg=Test3 a=10 a=30 s=3$`,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {

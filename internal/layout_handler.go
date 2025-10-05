@@ -138,11 +138,7 @@ type LayoutHandlerOptions struct {
 type layoutAttrs [][]byte // index from prefix/suffix keys -> preformatted attr
 
 func makeLayoutAttrs(opts *LayoutHandlerOptions) layoutAttrs {
-	la := make([][]byte, len(opts.PrefixKeys)+len(opts.SuffixKeys))
-	for i := range la {
-		la[i] = make([]byte, 0, 32) // preallocate some space
-	}
-	return la
+	return make([][]byte, len(opts.PrefixKeys)+len(opts.SuffixKeys))
 }
 
 func (la layoutAttrs) clone() layoutAttrs {
@@ -167,9 +163,7 @@ func (la layoutAttrs) buffer(key string, opts *LayoutHandlerOptions) *buffer.Buf
 		}
 		i += len(opts.PrefixKeys)
 	}
-	if len(la[i]) > 0 {
-		la[i] = make([]byte, 0, 32) // replace old value, preallocate some space
-	}
+	la[i] = make([]byte, 0, 32) // replace old value, preallocate some space
 	return (*buffer.Buffer)(&la[i])
 }
 

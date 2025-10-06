@@ -2,41 +2,54 @@ package slogx_test
 
 import (
 	"bytes"
-	"context"
 	"log/slog"
 	"os"
 	"testing"
+	"testing/slogtest"
 
 	"github.com/powerman/check"
 
 	"github.com/powerman/slogx"
 )
 
-func TestEnabled(tt *testing.T) {
+func TestContextHandler(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var buf bytes.Buffer
+	_, h := slogx.NewContextHandler(t.Context(), slog.NewTextHandler(&buf, nil))
+	t.Nil(slogtest.TestHandler(h, makeTextResults(t, &buf)))
+}
+
+func TestContextHandler_Enabled(tt *testing.T) {
 	t := check.T(tt)
 	t.Parallel()
 
 	h := slog.NewTextHandler(os.Stdout, nil)
-	slogx.SetDefaultContextHandler(context.Background(), h)
-	t.True(slog.Default().Enabled(context.Background(), slog.LevelWarn))
-	t.False(slog.Default().Enabled(context.Background(), slog.LevelDebug))
+	ctx := slogx.SetDefaultContextHandler(t.Context(), h)
+	t.False(slog.Default().Enabled(t.Context(), slog.LevelDebug))
+	t.True(slog.Default().Enabled(t.Context(), slog.LevelInfo))
+	t.False(slog.Default().Enabled(ctx, slog.LevelDebug))
+	t.True(slog.Default().Enabled(ctx, slog.LevelInfo))
 
 	h = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})
-	ctx := slogx.NewContextWithHandler(context.Background(), h)
-	t.True(slog.Default().Enabled(ctx, slog.LevelError))
+	ctx = slogx.NewContextWithHandler(t.Context(), h)
+	t.False(slog.Default().Enabled(t.Context(), slog.LevelDebug))
+	t.True(slog.Default().Enabled(t.Context(), slog.LevelInfo))
 	t.False(slog.Default().Enabled(ctx, slog.LevelWarn))
+	t.True(slog.Default().Enabled(ctx, slog.LevelError))
 }
 
-func TestContextHandler(tt *testing.T) {
+func TestContextHandler_Smoke(tt *testing.T) {
 	t := check.T(tt)
 	t.Parallel()
 
 	var buf bytes.Buffer
 	var h slog.Handler
+
 	// With TextHandler
-	slogx.SetDefaultContextHandler(context.Background(), slog.NewTextHandler(&buf, nil))
+	slogx.SetDefaultContextHandler(t.Context(), slog.NewTextHandler(&buf, nil))
 	h = slog.NewTextHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
-	ctx := slogx.NewContextWithHandler(context.Background(), h)
+	ctx := slogx.NewContextWithHandler(t.Context(), h)
 	slog.InfoContext(ctx, "Some message")
 	t.Match(buf.String(), `level=INFO msg="Some message" g.key1=value1 g.key2=value2`)
 
@@ -55,9 +68,9 @@ func TestContextHandler(tt *testing.T) {
 	t.Match(buf.String(), `level=INFO msg="Some message" g.key1=value1 g.key2=value2 g.key4=value4`)
 
 	// With JsonHandler
-	slogx.SetDefaultContextHandler(context.Background(), slog.NewJSONHandler(&buf, nil))
+	slogx.SetDefaultContextHandler(t.Context(), slog.NewJSONHandler(&buf, nil))
 	h = slog.NewJSONHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
-	ctx = slogx.NewContextWithHandler(context.Background(), h)
+	ctx = slogx.NewContextWithHandler(t.Context(), h)
 	slog.InfoContext(ctx, "Some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"Some message","g":{"key1":"value1","key2":"value2"}}`)
 
@@ -86,37 +99,40 @@ func TestContextWith(tt *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
-	ctx := slogx.SetDefaultContextHandler(context.Background(), slog.NewTextHandler(&buf, nil))
+	ctx := slogx.SetDefaultContextHandler(t.Context(), slog.NewTextHandler(&buf, nil))
 
 	ctx = slogx.ContextWith(ctx, "k1", "v1", "k2", 2)
 	slog.InfoContext(ctx, "Some message")
-	t.Match(buf.String(), `"Some message" k1=v1 k2=2`)
+	t.Match(buf.String(), `"Some message" k1=v1 k2=2\n$`)
 
 	buf.Reset()
 	ctx = slogx.ContextWithGroup(ctx, "g1")
 	ctx = slogx.ContextWith(ctx, slog.String("k3", "v3"), "k4", 4)
-	slog.InfoContext(ctx, "Some message")
-	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4`)
+	slog.InfoContext(ctx, "Some message", "a", 42)
+	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4 g1.a=42\n$`)
 
 	buf.Reset()
 	ctx = slogx.ContextWithGroup(ctx, "g2")
+	slog.InfoContext(ctx, "Some message")
+	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4\n$`)
+	slog.InfoContext(ctx, "Some message", "a", 42)
+	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4 g1.g2.a=42\n$`)
 	ctx = slogx.ContextWithAttrs(ctx, slog.String("k5", "v5"), slog.Int("k6", 6))
 	slog.InfoContext(ctx, "Some message")
-	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4 g1.g2.k5=v5 g1.g2.k6=6`)
+	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4 g1.g2.k5=v5 g1.g2.k6=6\n$`)
 }
 
 func TestLaxContextHandler(tt *testing.T) {
 	t := check.T(tt)
 
 	var buf bytes.Buffer
-	ctx := context.Background()
 	h := slog.NewTextHandler(&buf, nil).WithAttrs([]slog.Attr{slog.String("key1", "value1")})
-	slogx.SetDefaultContextHandler(context.Background(), h)
-	slog.InfoContext(ctx, "Some message")
+	slogx.SetDefaultContextHandler(t.Context(), h)
+	slog.InfoContext(t.Context(), "Some message")
 	t.Match(buf.String(), `level=INFO msg="Some message" key1=value1 !BADCTX=context.Background`)
 
 	buf.Reset()
-	slogx.SetDefaultContextHandler(context.Background(), h, slogx.LaxContextHandler())
-	slog.InfoContext(ctx, "Some message")
+	slogx.SetDefaultContextHandler(t.Context(), h, slogx.LaxContextHandler())
+	slog.InfoContext(t.Context(), "Some message")
 	t.NotMatch(buf.String(), "!BADCTX")
 }

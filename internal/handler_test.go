@@ -461,7 +461,7 @@ func TestJSONAndTextHandlers(t *testing.T) {
 		},
 	} {
 		r := NewRecord(testTime, LevelInfo, "message", callerPC(2))
-		source := r.Source()
+		source := recordSource(r)
 		if source == nil {
 			t.Fatal("source is nil")
 		}

@@ -313,7 +313,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	}
 	// source
 	if h.opts.AddSource {
-		src := r.Source()
+		src := recordSource(r)
 		if src == nil {
 			src = &Source{}
 		}
@@ -502,7 +502,7 @@ func (s *handleState) appendAttr(a Attr) {
 	// Special case: Source.
 	if v := a.Value; v.Kind() == KindAny {
 		if src, ok := v.Any().(*Source); ok {
-			if isEmptySource(src) {
+			if sourceIsEmpty(src) {
 				return
 			}
 			a.Value = StringValue(fmt.Sprintf("%s:%d", src.File, src.Line))

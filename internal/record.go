@@ -4,6 +4,8 @@
 
 package internal
 
+import "runtime"
+
 const badKey = "!BADKEY"
 
 // argsToAttr turns a prefix of the nonempty args slice into an Attr
@@ -25,5 +27,29 @@ func argsToAttr(args []any) (Attr, []any) {
 
 	default:
 		return Any(badKey, x), args[1:]
+	}
+}
+
+// sourceIsEmpty returns whether the Source struct is nil or only contains zero fields.
+//
+// Same as (*Source).isEmpty.
+func sourceIsEmpty(s *Source) bool { return s == nil || *s == Source{} }
+
+// Source returns a new Source for the log event using r's PC.
+// If the PC field is zero, meaning the Record was created without the necessary information
+// or the location is unavailable, then nil is returned.
+//
+// Same as Record.Source (added in Go 1.25 and copied here for compatibility with 1.24.6).
+func recordSource(r Record) *Source {
+	if r.PC == 0 {
+		return nil
+	}
+
+	fs := runtime.CallersFrames([]uintptr{r.PC})
+	f, _ := fs.Next()
+	return &Source{
+		Function: f.Function,
+		File:     f.File,
+		Line:     f.Line,
 	}
 }

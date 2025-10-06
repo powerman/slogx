@@ -60,8 +60,3 @@ var (
 	StringValue    = slog.StringValue
 	Time           = slog.Time
 )
-
-// isEmptySource returns whether the Source struct is nil or only contains zero fields.
-//
-// Same as (*Source).isEmpty.
-func isEmptySource(s *Source) bool { return s == nil || *s == Source{} }

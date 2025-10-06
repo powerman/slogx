@@ -37,7 +37,7 @@ func TestLayoutHandler_StdOptions(tt *testing.T) {
 		replaceAttr func(groups []string, a slog.Attr) slog.Attr
 		want        string
 	}{
-		{true, slog.LevelInfo, nil, `^time=\S+ level=INFO source=/\S+/layout_handler_test.go:\d+ msg=test\n$`},
+		{true, slog.LevelInfo, nil, `^time=\S+ level=INFO source=\S+/layout_handler_test.go:\d+ msg=test\n$`},
 		{false, slog.LevelWarn, nil, `^$`},
 		{false, nil, removeTime, `^level=INFO msg=test\n$`},
 	}

@@ -54,7 +54,8 @@ type handlerOp struct {
 	attrs []slog.Attr
 }
 
-type contextHandlerOption func(*ContextHandler)
+// ContextHandlerOption is an option for [NewContextHandler].
+type ContextHandlerOption func(*ContextHandler)
 
 // NewContextHandler creates a ContextHandler and a context with next handler inside.
 //
@@ -81,7 +82,7 @@ type contextHandlerOption func(*ContextHandler)
 // will be used as a fallback (thus attrs and groups stored in context will be ignored).
 // Even if your application code is correct, this may still happen in third-party libraries
 // which do not support context-aware logging functions and do not accept custom logger instance.
-func NewContextHandler(ctx context.Context, next slog.Handler, opts ...contextHandlerOption) (context.Context, *ContextHandler) {
+func NewContextHandler(ctx context.Context, next slog.Handler, opts ...ContextHandlerOption) (context.Context, *ContextHandler) {
 	h := &ContextHandler{
 		fallback: next,
 	}
@@ -145,7 +146,7 @@ func (h *ContextHandler) WithGroup(name string) slog.Handler {
 // It is a shortcut for NewContextHandler + [slog.SetDefault].
 //
 // See [NewContextHandler] for details and usage rules.
-func SetDefaultContextHandler(ctx context.Context, next slog.Handler, opts ...contextHandlerOption) context.Context {
+func SetDefaultContextHandler(ctx context.Context, next slog.Handler, opts ...ContextHandlerOption) context.Context {
 	ctx, h := NewContextHandler(ctx, next, opts...)
 	slog.SetDefault(slog.New(h))
 	return ctx
@@ -164,7 +165,7 @@ func ContextWithGroup(ctx context.Context, group string) context.Context {
 }
 
 // LaxContextHandler is an option for disable adding !BADCTX attr.
-func LaxContextHandler() contextHandlerOption { //nolint:revive // By design.
+func LaxContextHandler() ContextHandlerOption {
 	return func(h *ContextHandler) {
 		h.omitBadCtx = true
 	}

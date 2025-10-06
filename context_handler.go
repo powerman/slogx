@@ -152,10 +152,16 @@ func SetDefaultContextHandler(ctx context.Context, next slog.Handler, opts ...Co
 	return ctx
 }
 
-// ContextWithAttrs applies attrs to a handler stored in ctx.
-func ContextWithAttrs(ctx context.Context, attrs ...any) context.Context {
+// ContextWith applies attrs to a handler stored in ctx.
+func ContextWith(ctx context.Context, attrs ...any) context.Context {
 	handler := HandlerFromContext(ctx)
 	return NewContextWithHandler(ctx, handler.WithAttrs(internal.ArgsToAttrSlice(attrs)))
+}
+
+// ContextWithAttrs applies attrs to a handler stored in ctx.
+func ContextWithAttrs(ctx context.Context, attrs ...slog.Attr) context.Context {
+	handler := HandlerFromContext(ctx)
+	return NewContextWithHandler(ctx, handler.WithAttrs(attrs))
 }
 
 // ContextWithGroup applies group to a handler stored in ctx.

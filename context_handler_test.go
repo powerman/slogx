@@ -88,21 +88,21 @@ func TestContextWith(tt *testing.T) {
 	var buf bytes.Buffer
 	ctx := slogx.SetDefaultContextHandler(context.Background(), slog.NewTextHandler(&buf, nil))
 
-	ctx = slogx.ContextWithAttrs(ctx, "key1", "value1")
+	ctx = slogx.ContextWith(ctx, "k1", "v1", "k2", 2)
 	slog.InfoContext(ctx, "Some message")
-	t.Match(buf.String(), `"Some message" key1=value1`)
+	t.Match(buf.String(), `"Some message" k1=v1 k2=2`)
 
 	buf.Reset()
 	ctx = slogx.ContextWithGroup(ctx, "g1")
-	ctx = slogx.ContextWithAttrs(ctx, "key2", "value2")
+	ctx = slogx.ContextWith(ctx, slog.String("k3", "v3"), "k4", 4)
 	slog.InfoContext(ctx, "Some message")
-	t.Match(buf.String(), `"Some message" key1=value1 g1.key2=value2`)
+	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4`)
 
 	buf.Reset()
 	ctx = slogx.ContextWithGroup(ctx, "g2")
-	ctx = slogx.ContextWithAttrs(ctx, "key3", 3)
+	ctx = slogx.ContextWithAttrs(ctx, slog.String("k5", "v5"), slog.Int("k6", 6))
 	slog.InfoContext(ctx, "Some message")
-	t.Match(buf.String(), `"Some message" key1=value1 g1.key2=value2 g1.g2.key3=3`)
+	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4 g1.g2.k5=v5 g1.g2.k6=6`)
 }
 
 func TestLaxContextHandler(tt *testing.T) {

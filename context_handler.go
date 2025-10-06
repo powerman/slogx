@@ -11,43 +11,16 @@ const (
 	badCtx = "!BADCTX"
 )
 
-// ContextHandler provides a way to use slog.Handler stored in a context instead of slog.Logger.
-// This makes possible to store extra slog.Attr inside a context and make it magically work
-// without needs to get slog.Logger out of context each time you need to log something.
+// ContextHandler provides a way to use an [slog.Handler] stored in a context.
+// This makes possible to store attrs and groups inside a context and make it magically work
+// with global logger functions like [slog.InfoContext] without extra efforts
+// (like getting logger from context first or providing logger explicitly in function arguments).
 //
-// ContextHandler should be used as a default logger's handler. So it's useful only for
-// applications but not libraries - libraries shouldn't expect concrete configuration of
-// default logger and can't expect availability of ContextHandler's features.
+// ContextHandler must be set as a default logger's handler.
+// Without this it will be useless, because if you'll use non-default logger instance
+// everythere then you can add attrs to it directly and there is no need in ContextHandler.
 //
-// Usually when we need a context-specific logging we have to store pre-configured logger
-// inside a context. But then everywhere we need to log something we have to get logger
-// from context first, which is annoying. Also it means we have to use own logger instance and
-// unable to use global logger and log using functions like slog.InfoContext. Example:
-//
-//	func main() {
-//		log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-//		slog.SetDefault(log)
-//		// ...
-//		srv := &http.Server{
-//			//...
-//		}
-//		srv.ListenAndServe()
-//		log.Info("done")
-//	}
-//
-//	func (handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-//		ctx := r.Context()
-//		log := slog.With("remote_addr", r.RemoteAddr)
-//		ctx = slogx.NewContextWithLogger(ctx, log)
-//		handleRequest(ctx)
-//	}
-//
-//	func handleRequest(ctx context.Context) {
-//		log := slogx.LoggerFromContext(ctx) // <-- THIS LINE IS EVERYWHERE!
-//		log.Info("message")                 // Will also log "remote_addr" attribute.
-//	}
-//
-// With ContextHandler same functionality became:
+// Example:
 //
 //	func main() {
 //		handler := slog.NewJSONHandler(os.Stdout, nil)
@@ -63,25 +36,13 @@ const (
 //
 //	func (handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //		ctx := r.Context()
-//		ctx = slogx.ContextWithAttrs(ctx, "remote_addr", r.RemoteAddr)
+//		ctx = slogx.ContextWith(ctx, "remote_addr", r.RemoteAddr)
 //		handleRequest(ctx)
 //	}
 //
 //	func handleRequest(ctx context.Context) {
 //		slog.InfoContext(ctx, "message")    // Will also log "remote_addr" attribute.
 //	}
-//
-// Code not aware about ContextHandler (e.g. libraries) will continue to work correctly, but there
-// are some extra restrictions:
-//   - You should not modify default logger after initial configuration.
-//   - If you'll create new logger instance (e.g. using slog.With(...)) then you should not
-//     modify Attrs or Group inside ctx while using that logger instance.
-//
-// Non-Context functions like slog.Info() will work, but they will ignore Attr/Group
-// configured inside ctx.
-//
-// By default ContextHandler will add attr with key "!BADCTX" and value ctx if ctx does not contain
-// slog handler, but this can be disabled using LaxContextHandler option.
 type ContextHandler struct {
 	fallback   slog.Handler
 	ops        []handlerOp
@@ -95,14 +56,39 @@ type handlerOp struct {
 
 type contextHandlerOption func(*ContextHandler)
 
-func newContextHandler(fallback slog.Handler, opts ...contextHandlerOption) *ContextHandler {
+// NewContextHandler creates a ContextHandler and a context with next handler inside.
+//
+// Use [ContextWith], [ContextWithAttrs] and [ContextWithGroup] functions to
+// add attrs and groups to a handler stored in a context.
+//
+// Follow these rules to use ContextHandler correctly:
+//
+//  1. You should set returned ContextHandler as a default logger's handler.
+//  2. You should use returned context as a base context for your application.
+//  3. Your application code should use slog.*Context functions
+//     or (*slog.Logger).*Context methods for logging.
+//  4. Use [NewDefaultContextLogger] to create a logger instance for third-party libraries
+//     which do not support context-aware logging functions but support custom logger instance.
+//  5. Do not use [ContextWith], [ContextWithAttrs] and [ContextWithGroup] functions after
+//     slog.With* functions or (*slog.Logger).With* methods calls.
+//
+// By default ContextHandler will add attr with key "!BADCTX" and current context value
+// if it does not contain an [slog.Handler] - this helps to detect violations of the rules above.
+// Use [LaxContextHandler] option to disable this behaviour.
+//
+// If you won't use slog.*Context functions or (*slog.Logger).*Context methods for logging
+// or will use them with a context not created using returned context then next handler
+// will be used as a fallback (thus attrs and groups stored in context will be ignored).
+// Even if your application code is correct, this may still happen in third-party libraries
+// which do not support context-aware logging functions and do not accept custom logger instance.
+func NewContextHandler(ctx context.Context, next slog.Handler, opts ...contextHandlerOption) (context.Context, *ContextHandler) {
 	h := &ContextHandler{
-		fallback: fallback,
+		fallback: next,
 	}
 	for _, opt := range opts {
 		opt(h)
 	}
-	return h
+	return NewContextWithHandler(ctx, next), h
 }
 
 // Enabled implements slog.Handler interface.
@@ -155,10 +141,14 @@ func (h *ContextHandler) WithGroup(name string) slog.Handler {
 }
 
 // SetDefaultContextHandler sets a ContextHandler as a default logger's handler
-// and returns context with this handler inside.
-func SetDefaultContextHandler(ctx context.Context, fallback slog.Handler, opts ...contextHandlerOption) context.Context {
-	slog.SetDefault(slog.New(newContextHandler(fallback, opts...)))
-	return NewContextWithHandler(ctx, fallback)
+// and returns a context with next handler inside.
+// It is a shortcut for NewContextHandler + [slog.SetDefault].
+//
+// See [NewContextHandler] for details and usage rules.
+func SetDefaultContextHandler(ctx context.Context, next slog.Handler, opts ...contextHandlerOption) context.Context {
+	ctx, h := NewContextHandler(ctx, next, opts...)
+	slog.SetDefault(slog.New(h))
+	return ctx
 }
 
 // ContextWithAttrs applies attrs to a handler stored in ctx.

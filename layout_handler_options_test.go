@@ -171,13 +171,13 @@ func ExampleLayoutHandlerOptions_formatColorAttr() {
 	opts := slogx.LayoutHandlerOptions{
 		Format: map[string]string{
 			slog.TimeKey: "",                       // Omit time field for predictable output.
-			"err":        " err=\x1b[31m%v\x1b[0m", // Red color.
+			"err":        " err=\x1b[91m%v\x1b[0m", // Bright red color.
 		},
 	}
 	logger := slog.New(slogx.NewLayoutHandler(os.Stdout, &opts))
 	logger.Error("Test message", "status", 500, "err", io.EOF)
 	// Output:
-	// level=ERROR msg="Test message" status=500 err=[31mEOF[0m
+	// level=ERROR msg="Test message" status=500 err=[91mEOF[0m
 }
 
 func ExampleLayoutHandlerOptions_prefixVerticalAlign() {

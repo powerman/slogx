@@ -32,7 +32,7 @@ func TestContextHandler_Enabled(tt *testing.T) {
 	t.True(slog.Default().Enabled(ctx, slog.LevelInfo))
 
 	h = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError})
-	ctx = slogx.NewContextWithHandler(t.Context(), h)
+	ctx, _ = slogx.NewContextHandler(t.Context(), h)
 	t.False(slog.Default().Enabled(t.Context(), slog.LevelDebug))
 	t.True(slog.Default().Enabled(t.Context(), slog.LevelInfo))
 	t.False(slog.Default().Enabled(ctx, slog.LevelWarn))
@@ -49,7 +49,7 @@ func TestContextHandler_Smoke(tt *testing.T) {
 	// With TextHandler
 	slogx.SetDefaultContextHandler(t.Context(), slog.NewTextHandler(&buf, nil))
 	h = slog.NewTextHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
-	ctx := slogx.NewContextWithHandler(t.Context(), h)
+	ctx, _ := slogx.NewContextHandler(t.Context(), h)
 	slog.InfoContext(ctx, "Some message")
 	t.Match(buf.String(), `level=INFO msg="Some message" g.key1=value1 g.key2=value2`)
 
@@ -70,7 +70,7 @@ func TestContextHandler_Smoke(tt *testing.T) {
 	// With JsonHandler
 	slogx.SetDefaultContextHandler(t.Context(), slog.NewJSONHandler(&buf, nil))
 	h = slog.NewJSONHandler(&buf, nil).WithGroup("g").WithAttrs([]slog.Attr{slog.String("key1", "value1"), slog.String("key2", "value2")})
-	ctx = slogx.NewContextWithHandler(t.Context(), h)
+	ctx, _ = slogx.NewContextHandler(t.Context(), h)
 	slog.InfoContext(ctx, "Some message")
 	t.Match(buf.String(), `"level":"INFO","msg":"Some message","g":{"key1":"value1","key2":"value2"}}`)
 

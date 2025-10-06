@@ -11,6 +11,23 @@ const (
 	badCtx = "!BADCTX"
 )
 
+type contextKey int
+
+const (
+	contextKeyHandler contextKey = iota
+)
+
+// newContextWithHandler returns a new Context that carries value handler.
+func newContextWithHandler(ctx context.Context, handler slog.Handler) context.Context {
+	return context.WithValue(ctx, contextKeyHandler, handler)
+}
+
+// handlerFromContext returns a Handler value stored in ctx if exists or nil.
+func handlerFromContext(ctx context.Context) slog.Handler {
+	handler, _ := ctx.Value(contextKeyHandler).(slog.Handler)
+	return handler
+}
+
 // ContextHandler provides a way to use an [slog.Handler] stored in a context.
 // This makes possible to store attrs and groups inside a context and make it magically work
 // with global logger functions like [slog.InfoContext] without extra efforts
@@ -89,13 +106,13 @@ func NewContextHandler(ctx context.Context, next slog.Handler, opts ...ContextHa
 	for _, opt := range opts {
 		opt(h)
 	}
-	return NewContextWithHandler(ctx, next), h
+	return newContextWithHandler(ctx, next), h
 }
 
 // Enabled implements slog.Handler interface.
 // It uses handler returned by HandlerFromContext or fallback handler.
 func (h *ContextHandler) Enabled(ctx context.Context, l slog.Level) bool {
-	handler := HandlerFromContext(ctx)
+	handler := handlerFromContext(ctx)
 	if handler == nil {
 		handler = h.fallback
 	}
@@ -106,7 +123,7 @@ func (h *ContextHandler) Enabled(ctx context.Context, l slog.Level) bool {
 // It uses handler returned by HandlerFromContext or fallback handler.
 // Adds !BADCTX attr if HandlerFromContext returns nil. Use LaxContextHandler to disable this behaviour.
 func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
-	handler := HandlerFromContext(ctx)
+	handler := handlerFromContext(ctx)
 	if handler == nil {
 		handler = h.fallback
 		if !h.omitBadCtx {
@@ -154,20 +171,20 @@ func SetDefaultContextHandler(ctx context.Context, next slog.Handler, opts ...Co
 
 // ContextWith applies attrs to a handler stored in ctx.
 func ContextWith(ctx context.Context, attrs ...any) context.Context {
-	handler := HandlerFromContext(ctx)
-	return NewContextWithHandler(ctx, handler.WithAttrs(internal.ArgsToAttrSlice(attrs)))
+	handler := handlerFromContext(ctx)
+	return newContextWithHandler(ctx, handler.WithAttrs(internal.ArgsToAttrSlice(attrs)))
 }
 
 // ContextWithAttrs applies attrs to a handler stored in ctx.
 func ContextWithAttrs(ctx context.Context, attrs ...slog.Attr) context.Context {
-	handler := HandlerFromContext(ctx)
-	return NewContextWithHandler(ctx, handler.WithAttrs(attrs))
+	handler := handlerFromContext(ctx)
+	return newContextWithHandler(ctx, handler.WithAttrs(attrs))
 }
 
 // ContextWithGroup applies group to a handler stored in ctx.
 func ContextWithGroup(ctx context.Context, group string) context.Context {
-	handler := HandlerFromContext(ctx)
-	return NewContextWithHandler(ctx, handler.WithGroup(group))
+	handler := handlerFromContext(ctx)
+	return newContextWithHandler(ctx, handler.WithGroup(group))
 }
 
 // LaxContextHandler is an option for disable adding !BADCTX attr.

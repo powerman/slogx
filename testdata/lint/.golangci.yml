@@ -112,15 +112,15 @@ linters-settings:
     forbid:
       # Builtin function:
       - ^print(ln)?$
-      # slogx.CtxHandler support:
+      # slogx.ContextHandler support:
       - p: ^slog\.(Logger\.)?Error$
-        msg: Use ErrorContext to support slogx.CtxHandler
+        msg: Use ErrorContext to support slogx.ContextHandler
       - p: ^slog\.(Logger\.)?Warn$
-        msg: Use WarnContext to support slogx.CtxHandler
+        msg: Use WarnContext to support slogx.ContextHandler
       - p: ^slog\.(Logger\.)?Info$
-        msg: Use InfoContext to support slogx.CtxHandler
+        msg: Use InfoContext to support slogx.ContextHandler
       - p: ^slog\.(Logger\.)?Debug$
-        msg: Use DebugContext to support slogx.CtxHandler
+        msg: Use DebugContext to support slogx.ContextHandler
       # Optional message that gets included in error reports.
       #- p: ^fmt\.Print.*$
       #  msg: Do not commit print statements.

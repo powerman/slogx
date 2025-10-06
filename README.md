@@ -26,7 +26,7 @@ designed to make output easier to read with:
 
 ## Recommendations
 
-### Using CtxHandler with linter
+### Using ContextHandler with linter
 
 Disable non-Context slog functions (e.g. slog.Info) and methods using linter.
 
@@ -38,14 +38,14 @@ linters-settings:
   forbidigo:
     ...
     forbid:
-      # slogx.CtxHandler support:
+      # slogx.ContextHandler support:
       - p: ^slog\.(Logger\.)?Error$
-        msg: Use ErrorContext to support slogx.CtxHandler
+        msg: Use ErrorContext to support slogx.ContextHandler
       - p: ^slog\.(Logger\.)?Warn$
-        msg: Use WarnContext to support slogx.CtxHandler
+        msg: Use WarnContext to support slogx.ContextHandler
       - p: ^slog\.(Logger\.)?Info$
-        msg: Use InfoContext to support slogx.CtxHandler
+        msg: Use InfoContext to support slogx.ContextHandler
       - p: ^slog\.(Logger\.)?Debug$
-        msg: Use DebugContext to support slogx.CtxHandler
+        msg: Use DebugContext to support slogx.ContextHandler
     analyze-types: true
 ```

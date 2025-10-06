@@ -11,13 +11,13 @@ const (
 	badCtx = "!BADCTX"
 )
 
-// CtxHandler provides a way to use slog.Handler stored in a context instead of slog.Logger.
+// ContextHandler provides a way to use slog.Handler stored in a context instead of slog.Logger.
 // This makes possible to store extra slog.Attr inside a context and make it magically work
 // without needs to get slog.Logger out of context each time you need to log something.
 //
-// CtxHandler should be used as a default logger's handler. So it's useful only for
+// ContextHandler should be used as a default logger's handler. So it's useful only for
 // applications but not libraries - libraries shouldn't expect concrete configuration of
-// default logger and can't expect availability of CtxHandler's features.
+// default logger and can't expect availability of ContextHandler's features.
 //
 // Usually when we need a context-specific logging we have to store pre-configured logger
 // inside a context. But then everywhere we need to log something we have to get logger
@@ -47,11 +47,11 @@ const (
 //		log.Info("message")                 // Will also log "remote_addr" attribute.
 //	}
 //
-// With CtxHandler same functionality became:
+// With ContextHandler same functionality became:
 //
 //	func main() {
 //		handler := slog.NewJSONHandler(os.Stdout, nil)
-//		ctx := slogx.SetDefaultCtxHandler(context.Background(), handler)
+//		ctx := slogx.SetDefaultContextHandler(context.Background(), handler)
 //		// ...
 //		srv := &http.Server{
 //			BaseContext: func(net.Listener) context.Context { return ctx },
@@ -71,7 +71,7 @@ const (
 //		slog.InfoContext(ctx, "message")    // Will also log "remote_addr" attribute.
 //	}
 //
-// Code not aware about CtxHandler (e.g. libraries) will continue to work correctly, but there
+// Code not aware about ContextHandler (e.g. libraries) will continue to work correctly, but there
 // are some extra restrictions:
 //   - You should not modify default logger after initial configuration.
 //   - If you'll create new logger instance (e.g. using slog.With(...)) then you should not
@@ -80,9 +80,9 @@ const (
 // Non-Context functions like slog.Info() will work, but they will ignore Attr/Group
 // configured inside ctx.
 //
-// By default CtxHandler will add attr with key "!BADCTX" and value ctx if ctx does not contain
-// slog handler, but this can be disabled using LaxCtxHandler option.
-type CtxHandler struct {
+// By default ContextHandler will add attr with key "!BADCTX" and value ctx if ctx does not contain
+// slog handler, but this can be disabled using LaxContextHandler option.
+type ContextHandler struct {
 	fallback   slog.Handler
 	ops        []handlerOp
 	omitBadCtx bool
@@ -93,21 +93,21 @@ type handlerOp struct {
 	attrs []slog.Attr
 }
 
-type ctxHandlerOption func(*CtxHandler)
+type contextHandlerOption func(*ContextHandler)
 
-func newCtxHandler(fallback slog.Handler, opts ...ctxHandlerOption) *CtxHandler {
-	ctxHandler := &CtxHandler{
+func newContextHandler(fallback slog.Handler, opts ...contextHandlerOption) *ContextHandler {
+	h := &ContextHandler{
 		fallback: fallback,
 	}
 	for _, opt := range opts {
-		opt(ctxHandler)
+		opt(h)
 	}
-	return ctxHandler
+	return h
 }
 
 // Enabled implements slog.Handler interface.
 // It uses handler returned by HandlerFromContext or fallback handler.
-func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
+func (h *ContextHandler) Enabled(ctx context.Context, l slog.Level) bool {
 	handler := HandlerFromContext(ctx)
 	if handler == nil {
 		handler = h.fallback
@@ -117,8 +117,8 @@ func (h *CtxHandler) Enabled(ctx context.Context, l slog.Level) bool {
 
 // Handle implements slog.Handler interface.
 // It uses handler returned by HandlerFromContext or fallback handler.
-// Adds !BADCTX attr if HandlerFromContext returns nil. Use LaxCtxHandler to disable this behaviour.
-func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
+// Adds !BADCTX attr if HandlerFromContext returns nil. Use LaxContextHandler to disable this behaviour.
+func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 	handler := HandlerFromContext(ctx)
 	if handler == nil {
 		handler = h.fallback
@@ -137,27 +137,27 @@ func (h *CtxHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 // WithAttrs implements slog.Handler interface.
-func (h *CtxHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+func (h *ContextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	if len(attrs) == 0 {
 		return h
 	}
-	ctxHandler := h.withOp(handlerOp{attrs: attrs})
-	return ctxHandler
+	h2 := h.withOp(handlerOp{attrs: attrs})
+	return h2
 }
 
 // WithGroup implements slog.Handler interface.
-func (h *CtxHandler) WithGroup(name string) slog.Handler {
+func (h *ContextHandler) WithGroup(name string) slog.Handler {
 	if name == "" {
 		return h
 	}
-	ctxHandler := h.withOp(handlerOp{group: name})
-	return ctxHandler
+	h2 := h.withOp(handlerOp{group: name})
+	return h2
 }
 
-// SetDefaultCtxHandler sets a CtxHandler as a default logger's handler
+// SetDefaultContextHandler sets a ContextHandler as a default logger's handler
 // and returns context with this handler inside.
-func SetDefaultCtxHandler(ctx context.Context, fallback slog.Handler, opts ...ctxHandlerOption) context.Context {
-	slog.SetDefault(slog.New(newCtxHandler(fallback, opts...)))
+func SetDefaultContextHandler(ctx context.Context, fallback slog.Handler, opts ...contextHandlerOption) context.Context {
+	slog.SetDefault(slog.New(newContextHandler(fallback, opts...)))
 	return NewContextWithHandler(ctx, fallback)
 }
 
@@ -173,14 +173,14 @@ func ContextWithGroup(ctx context.Context, group string) context.Context {
 	return NewContextWithHandler(ctx, handler.WithGroup(group))
 }
 
-// LaxCtxHandler is an option for disable adding !BADCTX attr.
-func LaxCtxHandler() ctxHandlerOption { //nolint:revive // By design.
-	return func(ctxHandler *CtxHandler) {
-		ctxHandler.omitBadCtx = true
+// LaxContextHandler is an option for disable adding !BADCTX attr.
+func LaxContextHandler() contextHandlerOption { //nolint:revive // By design.
+	return func(h *ContextHandler) {
+		h.omitBadCtx = true
 	}
 }
 
-func (h *CtxHandler) withOp(op handlerOp) *CtxHandler {
+func (h *ContextHandler) withOp(op handlerOp) *ContextHandler {
 	h2 := *h // Create a copy to avoid modifying the original handler.
 	h2.ops = append(h2.ops[:len(h2.ops):len(h2.ops)], op)
 	return &h2

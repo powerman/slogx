@@ -11,7 +11,7 @@ import (
 	"github.com/powerman/slogx"
 )
 
-func TestContextHandler(tt *testing.T) {
+func TestContextWithHandler(tt *testing.T) {
 	t := check.T(tt)
 
 	t.Nil(slogx.HandlerFromContext(context.Background()))

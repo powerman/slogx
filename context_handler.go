@@ -30,7 +30,7 @@ func handlerFromContext(ctx context.Context) slog.Handler {
 
 // ContextHandler provides a way to use an [slog.Handler] stored in a context.
 // This makes possible to store attrs and groups inside a context and make it magically work
-// with global logger functions like [slog.InfoContext] without extra efforts
+// with default logger functions like [slog.InfoContext] without extra efforts
 // (like getting logger from context first or providing logger explicitly in function arguments).
 //
 // ContextHandler must be set as a default logger's handler.

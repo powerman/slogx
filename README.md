@@ -26,7 +26,7 @@ designed to make output easier to read with:
 
 ## Recommendations
 
-### Using ContextHandler with linter
+### Using NewContextHandler with linter
 
 Disable non-Context slog functions (e.g. slog.Info) and methods using linter.
 
@@ -38,14 +38,14 @@ linters-settings:
   forbidigo:
     ...
     forbid:
-      # slogx.ContextHandler support:
+      # slogx.NewContextHandler support:
       - p: ^slog\.(Logger\.)?Error$
-        msg: Use ErrorContext to support slogx.ContextHandler
+        msg: Use ErrorContext to support slogx.NewContextHandler
       - p: ^slog\.(Logger\.)?Warn$
-        msg: Use WarnContext to support slogx.ContextHandler
+        msg: Use WarnContext to support slogx.NewContextHandler
       - p: ^slog\.(Logger\.)?Info$
-        msg: Use InfoContext to support slogx.ContextHandler
+        msg: Use InfoContext to support slogx.NewContextHandler
       - p: ^slog\.(Logger\.)?Debug$
-        msg: Use DebugContext to support slogx.ContextHandler
+        msg: Use DebugContext to support slogx.NewContextHandler
     analyze-types: true
 ```

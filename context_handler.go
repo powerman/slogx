@@ -174,3 +174,28 @@ func ContextWithGroup(ctx context.Context, group string) context.Context {
 	handler := handlerFromContext(ctx)
 	return newContextWithHandler(ctx, handler.WithGroup(group))
 }
+
+// NewDefaultContextLogger creates a new slog.Logger which uses defaultCtx
+// when calling logging methods without context (like [(*slog.Logger).Info]).
+//
+// This is useful to provide logger for third-party libraries
+// which do not use context-aware logging methods but support custom logger instance.
+func NewDefaultContextLogger(defaultCtx context.Context, logger *slog.Logger) *slog.Logger {
+	next := logger.Handler()
+	h := NewWrapHandler(next, WrapHandlerConfig{
+		ProxyWith: true,
+		Enabled: func(ctx context.Context, l slog.Level, _ *GroupOrAttrs, next slog.Handler) bool {
+			if ctx == context.Background() {
+				ctx = defaultCtx
+			}
+			return next.Enabled(ctx, l)
+		},
+		Handle: func(ctx context.Context, r slog.Record, goa *GroupOrAttrs, next slog.Handler) error {
+			if ctx == context.Background() {
+				ctx = defaultCtx
+			}
+			return next.Handle(ctx, goa.Record(r))
+		},
+	})
+	return slog.New(h)
+}

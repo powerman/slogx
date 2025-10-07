@@ -153,3 +153,32 @@ func TestContextMiddleware(tt *testing.T) {
 	log.With("a", 1).WithGroup("g").InfoContext(ctx, "Test", "b", 2)
 	t.Match(buf.String(), `level=INFO msg=Test middleware=true a=1 g.b=2`)
 }
+
+func TestNewDefaultContextLogger(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var buf bytes.Buffer
+
+	ctx := slogx.SetDefaultContextHandler(t.Context(), slog.NewTextHandler(&buf, nil))
+	ctx = slogx.ContextWith(ctx, "k1", "v1", "k2", 2)
+
+	log := slog.Default()
+	log.Info("Test", "a", 42)
+	t.Match(buf.String(), `level=INFO msg=Test a=42 !BADCTX=context.Background\n$`)
+
+	log = slogx.NewDefaultContextLogger(ctx, log)
+
+	buf.Reset()
+	log.InfoContext(ctx, "Test", "a", 42)
+	t.Match(buf.String(), `level=INFO msg=Test k1=v1 k2=2 a=42\n$`)
+
+	ctx = slogx.ContextWith(ctx, "k3", true)
+
+	buf.Reset()
+	log.Info("Test", "a", 42)
+	t.Match(buf.String(), `level=INFO msg=Test k1=v1 k2=2 a=42\n$`)
+
+	buf.Reset()
+	log.InfoContext(ctx, "Test", "a", 42)
+	t.Match(buf.String(), `level=INFO msg=Test k1=v1 k2=2 k3=true a=42\n$`)
+}

@@ -1,4 +1,4 @@
-# Origin: https://github.com/powerman/golangci-lint-strict version 2.4.0
+# Origin: https://github.com/powerman/golangci-lint-strict version 2.5.0
 version: "2"
 linters:
   default: all

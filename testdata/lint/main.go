@@ -3,49 +3,49 @@ package main
 
 import (
 	"context"
-	"log/slog"
-	l "log/slog"
+	"log/slog"   //nolint:gocritic,staticcheck // By design.
+	l "log/slog" //nolint:revive,gocritic,staticcheck // By design.
 )
 
 func main() {
 	log := slog.Default()
 	ctx := context.Background()
 
-	log.Error("error message")
-	log.Warn("warn message")
-	log.Info("info message")
-	log.Debug("debug message")
-	log.ErrorContext(ctx, "error message")
-	log.WarnContext(ctx, "warn message")
-	log.InfoContext(ctx, "info message")
-	log.DebugContext(ctx, "debug message")
+	log.Error("Error message")
+	log.Warn("Warn message")
+	log.Info("Info message")
+	log.Debug("Debug message")
+	log.ErrorContext(ctx, "Error message")
+	log.WarnContext(ctx, "Warn message")
+	log.InfoContext(ctx, "Info message")
+	log.DebugContext(ctx, "Debug message")
 
-	slog.Error("error message")
-	slog.Warn("warn message")
-	slog.Info("info message")
-	slog.Debug("debug message")
-	slog.ErrorContext(ctx, "error message")
-	slog.WarnContext(ctx, "warn message")
-	slog.InfoContext(ctx, "info message")
-	slog.DebugContext(ctx, "debug message")
+	slog.Error("Error message")
+	slog.Warn("Warn message")
+	slog.Info("Info message")
+	slog.Debug("Debug message")
+	slog.ErrorContext(ctx, "Error message")
+	slog.WarnContext(ctx, "Warn message")
+	slog.InfoContext(ctx, "Info message")
+	slog.DebugContext(ctx, "Debug message")
 
 	ll := l.Default()
 
-	ll.Error("error message")
-	ll.Warn("warn message")
-	ll.Info("info message")
-	ll.Debug("debug message")
-	ll.ErrorContext(ctx, "error message")
-	ll.WarnContext(ctx, "warn message")
-	ll.InfoContext(ctx, "info message")
-	ll.DebugContext(ctx, "debug message")
+	ll.Error("Error message")
+	ll.Warn("Warn message")
+	ll.Info("Info message")
+	ll.Debug("Debug message")
+	ll.ErrorContext(ctx, "Error message")
+	ll.WarnContext(ctx, "Warn message")
+	ll.InfoContext(ctx, "Info message")
+	ll.DebugContext(ctx, "Debug message")
 
-	l.Error("error message")
-	l.Warn("warn message")
-	l.Info("info message")
-	l.Debug("debug message")
-	l.ErrorContext(ctx, "error message")
-	l.WarnContext(ctx, "warn message")
-	l.InfoContext(ctx, "info message")
-	l.DebugContext(ctx, "debug message")
+	l.Error("Error message")
+	l.Warn("Warn message")
+	l.Info("Info message")
+	l.Debug("Debug message")
+	l.ErrorContext(ctx, "Error message")
+	l.WarnContext(ctx, "Warn message")
+	l.InfoContext(ctx, "Info message")
+	l.DebugContext(ctx, "Debug message")
 }

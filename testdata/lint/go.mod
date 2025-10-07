@@ -1,3 +1,3 @@
 module github.com/powerman/slogx/testdata/lint
 
-go 1.21
+go 1.24.6

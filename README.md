@@ -26,26 +26,15 @@ designed to make output easier to read with:
 
 ## Recommendations
 
-### Using NewContextHandler with linter
+### Use NewContextHandler with linter
 
-Disable non-Context slog functions (e.g. slog.Info) and methods using linter.
+Disable non-Context slog functions (e.g. `slog.Info`) and methods using linter.
 
-Example in golangci-lint config:
+Example golangci-lint v2 config:
 
 ```yaml
-linters-settings:
-  ...
-  forbidigo:
-    ...
-    forbid:
-      # slogx.NewContextHandler support:
-      - p: ^slog\.(Logger\.)?Error$
-        msg: Use ErrorContext to support slogx.NewContextHandler
-      - p: ^slog\.(Logger\.)?Warn$
-        msg: Use WarnContext to support slogx.NewContextHandler
-      - p: ^slog\.(Logger\.)?Info$
-        msg: Use InfoContext to support slogx.NewContextHandler
-      - p: ^slog\.(Logger\.)?Debug$
-        msg: Use DebugContext to support slogx.NewContextHandler
-    analyze-types: true
+linters:
+  settings:
+    sloglint:
+      context: all
 ```

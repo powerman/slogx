@@ -251,7 +251,7 @@ func (h *LayoutHandler) Enabled(_ context.Context, l Level) bool {
 func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 	// We are going to ignore empty groups, so if the entire slice consists of
 	// them, there is nothing to do.
-	if countEmptyGroups(as) == len(as) {
+	if CountEmptyGroups(as) == len(as) {
 		return h
 	}
 	h2 := h.clone()

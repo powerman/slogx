@@ -9,8 +9,8 @@ import (
 	"strconv"
 )
 
-// countEmptyGroups returns the number of empty group values in its argument.
-func countEmptyGroups(as []Attr) int {
+// CountEmptyGroups returns the number of empty group values in its argument.
+func CountEmptyGroups(as []Attr) int {
 	n := 0
 	for _, a := range as {
 		if isEmptyGroupValue(a.Value) {

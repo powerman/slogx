@@ -5,6 +5,12 @@ import (
 	"log/slog"
 )
 
+// Middleware is a function that wraps a slog.Handler.
+// It is a convenient type for building handler chains,
+// compatible with [github.com/samber/slog-multi.Middleware],
+// allowing to use [github.com/samber/slog-multi.Pipe] with handlers from this package.
+type Middleware = func(slog.Handler) slog.Handler
+
 // A WrapHandlerConfig sets configuration for [WrapHandler].
 //
 // All fields are optional, but without any callbacks it won't be very useful.
@@ -66,6 +72,21 @@ type WrapHandler struct {
 // You need to provide at least one callback in the configuration for it to be useful.
 func NewWrapHandler(next slog.Handler, cfg WrapHandlerConfig) *WrapHandler {
 	return &WrapHandler{cfg: cfg, next: next}
+}
+
+// NewWrapMiddleware turns a [NewWrapHandler] into a Middleware.
+//
+// Example usage with [github.com/samber/slog-multi]:
+//
+//	slogmulti.
+//		...
+//		Pipe(slogx.NewWrapMiddleware(slogx.WrapHandlerConfig{…})).
+//		...
+//		Handler(slog.NewTextHandler(os.Stdout, nil))
+func NewWrapMiddleware(cfg WrapHandlerConfig) Middleware {
+	return func(next slog.Handler) slog.Handler {
+		return NewWrapHandler(next, cfg)
+	}
 }
 
 // Enabled implements [slog.Handler] interface.

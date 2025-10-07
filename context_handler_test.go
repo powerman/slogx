@@ -2,12 +2,14 @@ package slogx_test
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"os"
 	"testing"
 	"testing/slogtest"
 
 	"github.com/powerman/check"
+	slogmulti "github.com/samber/slog-multi"
 
 	"github.com/powerman/slogx"
 )
@@ -135,4 +137,19 @@ func TestLaxContextHandler(tt *testing.T) {
 	slogx.SetDefaultContextHandler(t.Context(), h, slogx.LaxContextHandler())
 	slog.InfoContext(t.Context(), "Some message")
 	t.NotMatch(buf.String(), "!BADCTX")
+}
+
+func TestContextMiddleware(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var buf bytes.Buffer
+	ctx := t.Context()
+	setBase := func(baseCtx context.Context) { ctx = baseCtx } //nolint:fatcontext // False positive.
+
+	log := slog.New(slogmulti.
+		Pipe(slogx.NewContextMiddleware(ctx, setBase)).
+		Handler(slog.NewTextHandler(&buf, nil)))
+	ctx = slogx.ContextWith(ctx, "middleware", true)
+	log.With("a", 1).WithGroup("g").InfoContext(ctx, "Test", "b", 2)
+	t.Match(buf.String(), `level=INFO msg=Test middleware=true a=1 g.b=2`)
 }

@@ -9,6 +9,7 @@ import (
 	"testing/slogtest"
 
 	"github.com/powerman/check"
+	slogmulti "github.com/samber/slog-multi"
 
 	"github.com/powerman/slogx"
 )
@@ -49,4 +50,27 @@ func TestWrapHandler(tt *testing.T) {
 			t.Nil(slogtest.TestHandler(h, makeTextResults(t, &buf)))
 		})
 	}
+}
+
+func TestWrapMiddleware(tt *testing.T) {
+	t := check.T(tt)
+	t.Parallel()
+	var buf bytes.Buffer
+	enabledProxy := func(_ context.Context, _ slog.Level, _ *slogx.GroupOrAttrs, _ slog.Handler) bool {
+		return true
+	}
+	handleProxy := func(ctx context.Context, r slog.Record, goa *slogx.GroupOrAttrs, next slog.Handler) error {
+		r = goa.Record(r)
+		r.AddAttrs(slog.Bool("middleware", true))
+		return next.Handle(ctx, r)
+	}
+
+	log := slog.New(slogmulti.
+		Pipe(slogx.NewWrapMiddleware(slogx.WrapHandlerConfig{
+			Enabled: enabledProxy,
+			Handle:  handleProxy,
+		})).
+		Handler(slog.NewTextHandler(&buf, nil)))
+	log.With("a", 1).WithGroup("g").Debug("Test", "b", 2)
+	t.Match(buf.String(), `level=DEBUG msg=Test a=1 g.b=2 middleware=true`)
 }

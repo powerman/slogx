@@ -125,6 +125,27 @@ func NewContextHandler(ctx context.Context, next slog.Handler, opts ...ContextHa
 	return newContextWithHandler(ctx, next), h
 }
 
+// NewContextMiddleware turns a [NewContextHandler] into a Middleware.
+//
+// It accepts a setBase callback to deliver a base context with next handler inside
+// to the caller, because Middleware does not provide a way to return it.
+//
+// Example usage with [github.com/samber/slog-multi]:
+//
+//	setBase := func(baseCtx context.Context) { ctx = baseCtx }
+//	slogmulti.
+//		...
+//		Pipe(slogx.NewContextMiddleware(ctx, setBase)).
+//		...
+//		Handler(slog.NewTextHandler(os.Stdout, nil))
+func NewContextMiddleware(ctx context.Context, setBase func(context.Context), opts ...ContextHandlerOption) Middleware {
+	return func(next slog.Handler) slog.Handler {
+		baseCtx, h := NewContextHandler(ctx, next, opts...)
+		setBase(baseCtx)
+		return h
+	}
+}
+
 // SetDefaultContextHandler sets a contextHandler returned by [NewContextHandler]
 // as a default logger's handler and returns a context with next handler inside.
 // It is a shortcut for NewContextHandler + [slog.SetDefault].

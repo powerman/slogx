@@ -8,15 +8,15 @@ import (
 	"github.com/powerman/slogx"
 )
 
-func TestStack(tt *testing.T) {
+func TestErrorStack(tt *testing.T) {
 	t := check.T(tt)
 
-	stack := slogx.Stack()
+	stack := slogx.ErrorStack()
 	t.DeepEqual(stack.Key, slogx.StackKey)
 	t.HasPrefix(stack.Value, "goroutine")
-	t.NotMatch(stack.Value, "github.com/powerman/slogx.Stack()")
+	t.NotMatch(stack.Value, "github.com/powerman/slogx.ErrorStack()")
 	t.NotMatch(stack.Value, "/stack.go:")
-	t.Match(stack.Value, "github.com/powerman/slogx_test.TestStack")
+	t.Match(stack.Value, "github.com/powerman/slogx_test.TestErrorStack")
 	t.Match(stack.Value, "/stack_test.go:")
 	t.NotHasSuffix(stack.Value, "\n")
 }

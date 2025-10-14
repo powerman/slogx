@@ -145,7 +145,8 @@ type LayoutHandlerOptions struct {
 	// useful to include a custom separator (e.g. ':') in the format of the second key.
 	// For example: {"host": " [%s", "port": ":%s]"} will output " [example.com:80]".
 	//
-	// NewLayoutHandler will panic is format is invalid (unknown flag/verb after '%').
+	// NewLayoutHandler will panic is format is invalid
+	// (unknown flag/verb after '%', more than one verb).
 	Format map[string]string
 
 	// PrefixKeys specifies keys that, if present, output just before the message key,
@@ -177,7 +178,8 @@ type LayoutHandlerOptions struct {
 	SuffixKeys []string
 }
 
-// LayoutHandler is a handler that writes Records to an [io.Writer] in a text format
+// LayoutHandler is a handler created by [NewLayoutHandler]
+// that writes [slog.Record] to an [io.Writer] in a text format
 // designed for compact and easy to read output.
 //
 // It is a drop-in replacement for [slog.TextHandler] and implemented using modified
@@ -190,9 +192,9 @@ type LayoutHandler struct {
 	next slog.Handler
 }
 
-// NewLayoutHandler creates a new LayoutHandler that writes to w, using the given options.
+// NewLayoutHandler creates a new [LayoutHandler] that writes to w, using the given options.
 //
-// NewLayoutHandler panics if opts.Format contains an invalid format.
+// Panics if opts.Format contains an invalid format.
 func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) slog.Handler {
 	if opts == nil {
 		opts = &LayoutHandlerOptions{}

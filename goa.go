@@ -29,16 +29,16 @@ func (g *GroupOrAttrs) Total() int {
 
 // WithAttrs returns a GroupOrAttrs that includes the given attrs.
 // If there are no attrs or all attrs are empty groups, g is returned unchanged.
-func (g *GroupOrAttrs) WithAttrs(as []slog.Attr) *GroupOrAttrs {
-	if internal.CountEmptyGroups(as) == len(as) {
+func (g *GroupOrAttrs) WithAttrs(attrs []slog.Attr) *GroupOrAttrs {
+	if internal.CountEmptyGroups(attrs) == len(attrs) {
 		return g
 	}
 	if g.Total() == 0 {
 		g = nil
 	}
 	return &GroupOrAttrs{
-		attrs: as,
-		total: g.Total() + len(as),
+		attrs: attrs,
+		total: g.Total() + len(attrs),
 		prev:  g,
 	}
 }

@@ -9,8 +9,10 @@ import (
 
 // LogSkip emits a log record using handler with the
 // current time and the given level and message.
-// Value skip=0 works exactly like (*slog.Logger).Log,
-// value skip=1 skips caller of LogSkip() etc.
+// It is useful for logging from your own logging helpers.
+//
+// Value skip=0 works exactly like [*slog.Logger.Log],
+// value skip=1 skips caller of LogSkip etc.
 func LogSkip(ctx context.Context, skip int, handler slog.Handler, level slog.Level, msg string, args ...any) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -28,8 +30,10 @@ func LogSkip(ctx context.Context, skip int, handler slog.Handler, level slog.Lev
 
 // LogAttrsSkip emits a log record using handler with the
 // current time and the given level and message.
-// Value skip=0 works exactly like (*slog.Logger).LogAttrs,
-// value skip=1 skips caller of LogAttrsSkip() etc.
+// It is useful for logging from your own logging helpers.
+//
+// Value skip=0 works exactly like [*slog.Logger.LogAttrs],
+// value skip=1 skips caller of LogAttrsSkip etc.
 func LogAttrsSkip(ctx context.Context, skip int, handler slog.Handler, level slog.Level, msg string, attrs ...slog.Attr) {
 	if ctx == nil {
 		ctx = context.Background()

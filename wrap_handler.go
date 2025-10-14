@@ -5,15 +5,15 @@ import (
 	"log/slog"
 )
 
-// Middleware is a function that wraps a slog.Handler.
+// Middleware is a function that wraps an [slog.Handler].
 // It is a convenient type for building handler chains,
 // compatible with [github.com/samber/slog-multi.Middleware],
 // allowing to use [github.com/samber/slog-multi.Pipe] with handlers from this package.
 type Middleware = func(slog.Handler) slog.Handler
 
-// A WrapHandlerConfig sets configuration for [WrapHandler].
+// A WrapHandlerConfig contains a configuration for [WrapHandler].
 //
-// All fields are optional, but without any callbacks it won't be very useful.
+// All fields are optional, but without at least one callback it won't be very useful.
 //
 // When ProxyWith is true, both WithAttrs and WithGroup calls are proxied to the next handler.
 // This mode is useful for transparent proxies that just want to intercept
@@ -24,7 +24,7 @@ type Middleware = func(slog.Handler) slog.Handler
 // WithAttrs calls are proxied to the next handler until the first WithGroup call.
 // This mode is useful for handlers that want to add top-level attributes
 // but want to proxy initial WithAttrs calls to the next handler to keep possible optimizations
-// in the next handler (e.g. pre-rendered prefix in slog.TextHandler and slog.JSONHandler).
+// in the next handler (e.g. pre-rendered prefix in [slog.TextHandler] and [slog.JSONHandler]).
 // In this mode, Enabled and Handle callbacks get nil *GroupOrAttrs before
 // the first WithGroup call with non-empty group.
 //
@@ -56,10 +56,10 @@ type WrapHandlerConfig struct {
 	ProxyWithAttrs bool // Proxy WithAttrs calls before first WithGroup call.
 }
 
-// WrapHandler is a [slog.Handler] that wraps another slog.Handler.
+// WrapHandler is an [slog.Handler] that wraps another slog.Handler.
 // It is a useful building block for handlers that want to wrap another handler.
 //
-// It is able to proxy or collect WithAttrs and WithGroup calls using [GroupOrAttrs]
+// It is able to either proxy or collect WithAttrs and WithGroup calls using [GroupOrAttrs]
 // and to call optional Enabled and Handle callbacks depending on configuration.
 type WrapHandler struct {
 	cfg  WrapHandlerConfig

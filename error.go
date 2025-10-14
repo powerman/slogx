@@ -59,11 +59,21 @@ func (e errorAttrs) Error() string { return e.err.Error() }
 func (e errorAttrs) Unwrap() error { return e.err }
 
 // NewError returns err with attached slog attrs specified by args.
+//
+// You should use [slog.HandlerOptions].ReplaceAttr function returned by [ErrorAttrs]
+// to make slog log these attrs.
+//
+// If err is nil then returns nil.
 func NewError(err error, args ...any) error {
 	return NewErrorAttrs(err, internal.ArgsToAttrSlice(args)...)
 }
 
 // NewErrorAttrs returns err with attached slog attrs.
+//
+// You should use [slog.HandlerOptions].ReplaceAttr function returned by [ErrorAttrs]
+// to make slog log these attrs.
+//
+// If err is nil then returns nil.
 func NewErrorAttrs(err error, attrs ...slog.Attr) error {
 	if err == nil {
 		return nil
@@ -90,35 +100,32 @@ func (cfg errorAttrsConfig) key(key string, groups []string) string {
 	}
 }
 
-// ErrorAttrsOption is an option for ErrorAttrs.
+// ErrorAttrsOption is an option for [ErrorAttrs].
 type ErrorAttrsOption func(*errorAttrsConfig)
 
-// GroupTopErrorAttrs is an option for ErrorAttrs.
-//
-// By default error attrs are inlined at top level and grouped at sub levels.
-// This option makes attrs to be grouped at top level (when groups is empty).
+// GroupTopErrorAttrs makes error attrs to be grouped at top level (when groups is empty).
 func GroupTopErrorAttrs() ErrorAttrsOption {
 	return func(cfg *errorAttrsConfig) {
 		cfg.groupTopErrorAttrs = true
 	}
 }
 
-// InlineSubErrorAttrs is an option for ErrorAttrs.
-//
-// By default error attrs are inlined at top level and grouped at sub levels.
-// This option makes attrs to be inlined at sub levels (when groups is not empty).
+// InlineSubErrorAttrs makes error attrs to be inlined at sub levels (when groups is not empty).
 func InlineSubErrorAttrs() ErrorAttrsOption {
 	return func(cfg *errorAttrsConfig) {
 		cfg.inlineSubErrorAttrs = true
 	}
 }
 
-// ErrorAttrs returns an slog.ReplaceAttr function that will replace attr's Value of error type
-// with slog.GroupValue containing all attrs attached to any of recursively unwrapped errors
-// plus attr with error.
+// ErrorAttrs returns an [slog.HandlerOptions].ReplaceAttr function
+// that will replace attr's Value of error type
+// with [slog.GroupValue] containing all attrs attached (by [NewError] or [NewErrorAttrs])
+// to any of recursively unwrapped errors
+// plus attr with error (stripped of attached attrs) itself at the end.
 //
 // By default returned attr's Key depends on groups:
 // if groups are empty then Key will be empty, otherwise Key will be attr's Key.
+// In other words, error attrs are inlined at top level and grouped at sub levels.
 // This behaviour may be changed by given options.
 //
 // If attr's Value is not of error type or error has no attached attrs then returns original attr.

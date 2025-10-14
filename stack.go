@@ -6,8 +6,8 @@ import (
 	"runtime"
 )
 
-// StackKey is the key used by the [ErrorStack] for the stack trace
-// of the log call. The associated value is a string.
+// StackKey is the key used by the [Stack], [StackSkip] and [ErrorStack]
+// for the stack trace attribute.
 const StackKey = "stack"
 
 const stackSize = 64 << 10 // 64 KB should be enough.
@@ -15,11 +15,12 @@ const stackSize = 64 << 10 // 64 KB should be enough.
 // ErrorStack returns a stack trace formatted as panic output.
 //
 // It formats a stack trace when called, so it is not a good choice for using in log calls
-// that are disabled by the current log level because of the performance penalty.
+// that are disabled by the current log level because of the performance penalty
+// (in this case use [Stack] instead).
 // ErrorStack is intended to be used as a parameter to [NewError] or [NewErrorAttrs]
 // to capture a stack trace at the point where an error happens.
 //
-// It excludes a call of ErrorStack() itself from the stack trace.
+// It excludes a call of ErrorStack itself from the stack trace.
 //
 // Example usage:
 //
@@ -69,12 +70,11 @@ type stackValue struct {
 //
 //	// Will format the stack trace only if Debug log level is enabled.
 //	slog.Debug("something", slogx.Stack)
-var Stack = slog.Any(StackKey, stackValue{}) // Const.
+var Stack = StackSkip(0) // Const.
 
 // StackSkip returns an attribute that resolves to a stack trace formatted as panic output.
 //
 // It works like [Stack], but skips the given number of extra stack frames.
-// StackSkip(0) works exactly like Stack.
 // Negative skip values are treated as zero.
 //
 // Example usage:

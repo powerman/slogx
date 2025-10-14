@@ -42,9 +42,9 @@ func LaxContextHandler() ContextHandlerOption {
 	}
 }
 
-// NewContextHandler creates an slog.Handler and a context with next handler inside.
+// NewContextHandler creates an [slog.Handler] and a context with next handler inside.
 //
-// Returned contextHandler provides a way to use an [slog.Handler] stored in a context.
+// Returned contextHandler provides a way to use an slog.Handler stored in a context.
 // This makes possible to store attrs and groups inside a (handler in a) context and
 // make it work with default logger functions (like [slog.InfoContext]) without extra efforts
 // (like getting logger from context first or providing logger explicitly in function arguments).
@@ -57,23 +57,23 @@ func LaxContextHandler() ContextHandlerOption {
 //  1. You should set returned contextHandler as a default logger's handler.
 //     Without this it will be useless, because if you'll use non-default logger instance
 //     everythere then you can add attrs to it directly and there is no need in contextHandler.
-//  2. You should use returned context as a base context for your application.
-//  3. Your application code should use slog.*Context functions
-//     or (*slog.Logger).*Context methods for logging.
+//  2. You should use returned ctxWithNext as a base context for your application.
+//  3. Your application code should use Context-aware slog functions/methods for logging.
 //  4. Use [NewDefaultContextLogger] to create a logger instance for third-party libraries
-//     which do not support context-aware logging functions but support custom logger instance.
+//     which do not support Context-aware logging functions but support custom logger instance.
 //  5. Do not use [ContextWith], [ContextWithAttrs] and [ContextWithGroup] functions after
 //     slog.With* functions or (*slog.Logger).With* methods calls.
 //
 // By default contextHandler will add attr with key "!BADCTX" and current context value
-// if it does not contain an [slog.Handler] - this helps to detect violations of the rules above.
-// Use [LaxContextHandler] option to disable this behaviour.
+// if it does not contain a handler - this helps to detect violations of the rules above.
+// Use [LaxContextHandler] option to disable this behaviour when using third-party libraries
+// which do not support Context-aware logging functions and do not accept custom logger instance.
 //
-// If you won't use slog.*Context functions or (*slog.Logger).*Context methods for logging
-// or will use them with a context not created using returned context then next handler
+// If you won't use Context-aware slog functions/methods for logging
+// or will use them with a context not based on ctxWithNext then next handler
 // will be used as a fallback (thus attrs and groups stored in context will be ignored).
 // Even if your application code is correct, this may still happen in third-party libraries
-// which do not support context-aware logging functions and do not accept custom logger instance.
+// which do not support Context-aware logging functions and do not accept custom logger instance.
 //
 // Example usage in an HTTP server:
 //
@@ -157,26 +157,35 @@ func SetDefaultContextHandler(ctx context.Context, next slog.Handler, opts ...Co
 	return ctx
 }
 
-// ContextWith applies attrs to a handler stored in ctx.
-func ContextWith(ctx context.Context, attrs ...any) context.Context {
+// ContextWith applies slog attrs specified by args
+// to a handler stored in ctx by [NewContextHandler].
+//
+// Panics if ctx does not contain a handler.
+func ContextWith(ctx context.Context, args ...any) context.Context {
 	handler := handlerFromContext(ctx)
-	return newContextWithHandler(ctx, handler.WithAttrs(internal.ArgsToAttrSlice(attrs)))
+	return newContextWithHandler(ctx, handler.WithAttrs(internal.ArgsToAttrSlice(args)))
 }
 
-// ContextWithAttrs applies attrs to a handler stored in ctx.
+// ContextWithAttrs applies attrs
+// to a handler stored in ctx by [NewContextHandler].
+//
+// Panics if ctx does not contain a handler.
 func ContextWithAttrs(ctx context.Context, attrs ...slog.Attr) context.Context {
 	handler := handlerFromContext(ctx)
 	return newContextWithHandler(ctx, handler.WithAttrs(attrs))
 }
 
-// ContextWithGroup applies group to a handler stored in ctx.
+// ContextWithGroup applies group
+// to a handler stored in ctx by [NewContextHandler].
+//
+// Panics if ctx does not contain a handler.
 func ContextWithGroup(ctx context.Context, group string) context.Context {
 	handler := handlerFromContext(ctx)
 	return newContextWithHandler(ctx, handler.WithGroup(group))
 }
 
-// NewDefaultContextLogger creates a new slog.Logger which uses defaultCtx
-// when calling logging methods without context (like [(*slog.Logger).Info]).
+// NewDefaultContextLogger creates a new [*slog.Logger] which uses defaultCtx
+// when calling logging methods without context (like [*slog.Logger.Info]).
 //
 // This is useful to provide logger for third-party libraries
 // which do not use context-aware logging methods but support custom logger instance.

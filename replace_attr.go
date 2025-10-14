@@ -8,7 +8,7 @@ import "log/slog"
 // previous function in a chain.
 //
 // If one of chained functions will return zero [slog.Attr] or an attr with
-// .Value.Kind() == [slog.KindGroup] then it skips next functions in a chain and
+// value of kind [slog.KindGroup] then it skips next functions in a chain and
 // returns this attr.
 func ChainReplaceAttr(fs ...func([]string, slog.Attr) slog.Attr) func([]string, slog.Attr) slog.Attr {
 	if len(fs) == 0 {

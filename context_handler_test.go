@@ -182,4 +182,8 @@ func TestNewDefaultContextLogger(tt *testing.T) {
 	buf.Reset()
 	log.InfoContext(ctx, "Test", "a", 42)
 	t.Match(buf.String(), `level=INFO msg=Test k1=v1 k2=2 k3=true a=42\n$`)
+
+	t.Panic(func() { slogx.ContextWith(context.Background(), "k1", 1) })
+	t.Panic(func() { slogx.ContextWithAttrs(context.Background(), slogx.Stack) })
+	t.Panic(func() { slogx.ContextWithGroup(context.Background(), "g") })
 }

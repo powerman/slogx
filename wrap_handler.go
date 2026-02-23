@@ -56,7 +56,7 @@ type WrapHandlerConfig struct {
 	ProxyWithAttrs bool // Proxy WithAttrs calls before first WithGroup call.
 }
 
-// WrapHandler is an [slog.Handler] that wraps another slog.Handler.
+// WrapHandler is an [slog.Handler] that wraps another [slog.Handler].
 // It is a useful building block for handlers that want to wrap another handler.
 //
 // It is able to either proxy or collect WithAttrs and WithGroup calls using [GroupOrAttrs]

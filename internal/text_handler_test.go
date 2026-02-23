@@ -118,7 +118,7 @@ func (t text) MarshalText() ([]byte, error) {
 	if t.s == "" {
 		return nil, errors.New("text: empty string")
 	}
-	return []byte(fmt.Sprintf("text{%q}", t.s)), nil
+	return fmt.Appendf(nil, "text{%q}", t.s), nil
 }
 
 func TestTextHandlerPreformatted(t *testing.T) {
@@ -140,7 +140,7 @@ func TestTextHandlerPreformatted(t *testing.T) {
 
 func TestTextHandlerAlloc(t *testing.T) {
 	r := NewRecord(time.Now(), LevelInfo, "msg", 0)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		r.AddAttrs(Int("x = y", i))
 	}
 	var h Handler = NewTextHandler(io.Discard, nil)

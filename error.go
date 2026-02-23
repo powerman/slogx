@@ -27,8 +27,8 @@ func newErrorNoAttrs(err error) error {
 
 		es := e2.Unwrap()
 		for i := len(es) - 1; i > 0; i-- {
-			if strings.HasSuffix(msg, "\n"+es[i].Error()) {
-				msg = strings.TrimSuffix(msg, "\n"+es[i].Error())
+			if before, ok0 := strings.CutSuffix(msg, "\n"+es[i].Error()); ok0 {
+				msg = before
 			}
 		}
 

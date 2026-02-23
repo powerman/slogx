@@ -87,7 +87,7 @@ func TestErrorAttrs_ReturnOriginal(tt *testing.T) {
 func TestErrorAttrs_ExpandOnce(tt *testing.T) {
 	t := check.T(tt)
 	t.Parallel()
-	log, buf := newLog(slogx.ErrorAttrs(), slogx.ErrorAttrs())
+	log, buf := newLog(slogx.ErrorAttrs(), slogx.ErrorAttrs()) //nolint:gocritic // By design.
 
 	log.Info("Msg", "err", slogx.NewError(io.EOF, "k", "v"))
 	t.Equal(buf.String(), "level=INFO msg=Msg k=v err=EOF\n")

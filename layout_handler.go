@@ -183,7 +183,7 @@ type LayoutHandlerOptions struct {
 // designed for compact and easy to read output.
 //
 // It is a drop-in replacement for [slog.TextHandler] and implemented using modified
-// slog.TextHandler code, so it has exactly same behaviour and similar performance
+// [slog.TextHandler] code, so it has exactly same behaviour and similar performance
 // when not using any of the extra options.
 //
 // To get improved output you should define order and formatting for some of the attributes

@@ -41,7 +41,7 @@ func TestConcurrentWrites(t *testing.T) {
 			sub1 := h.WithAttrs([]Attr{Bool("sub1", true)})
 			sub2 := h.WithAttrs([]Attr{Bool("sub2", true)})
 			var wg sync.WaitGroup
-			for i := 0; i < count; i++ {
+			for i := range count {
 				sub1Record := NewRecord(time.Time{}, LevelInfo, "hello from sub1", 0)
 				sub1Record.AddAttrs(Int("i", i))
 				sub2Record := NewRecord(time.Time{}, LevelInfo, "hello from sub2", 0)
@@ -502,10 +502,8 @@ func TestJSONAndTextHandlers(t *testing.T) {
 // that removes all Attrs with the given keys.
 func removeKeys(keys ...string) func([]string, Attr) Attr {
 	return func(_ []string, a Attr) Attr {
-		for _, k := range keys {
-			if a.Key == k {
-				return Attr{}
-			}
+		if slices.Contains(keys, a.Key) {
+			return Attr{}
 		}
 		return a
 	}

@@ -44,7 +44,7 @@ func LaxContextHandler() ContextHandlerOption {
 
 // NewContextHandler creates an [slog.Handler] and a context with next handler inside.
 //
-// Returned contextHandler provides a way to use an slog.Handler stored in a context.
+// Returned contextHandler provides a way to use an [slog.Handler] stored in a context.
 // This makes possible to store attrs and groups inside a (handler in a) context and
 // make it work with default logger functions (like [slog.InfoContext]) without extra efforts
 // (like getting logger from context first or providing logger explicitly in function arguments).
@@ -95,6 +95,8 @@ func LaxContextHandler() ContextHandlerOption {
 //		ctx = slogx.ContextWith(ctx, "remote_addr", r.RemoteAddr)
 //		slog.InfoContext(ctx, "message") // Will log "app" and "remote_addr" attributes.
 //	}
+//
+//nolint:godoclint // slog.With* sholdn't be a link.
 func NewContextHandler(ctx context.Context, next slog.Handler, opts ...ContextHandlerOption) (
 	ctxWithNext context.Context, contextHandler slog.Handler,
 ) {

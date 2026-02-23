@@ -46,16 +46,14 @@ func TestConcurrentWrites(t *testing.T) {
 				sub1Record.AddAttrs(Int("i", i))
 				sub2Record := NewRecord(time.Time{}, LevelInfo, "hello from sub2", 0)
 				sub2Record.AddAttrs(Int("i", i))
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					if err := sub1.Handle(ctx, sub1Record); err != nil {
 						t.Error(err)
 					}
 					if err := sub2.Handle(ctx, sub2Record); err != nil {
 						t.Error(err)
 					}
-				}()
+				})
 			}
 			wg.Wait()
 			for i := 1; i <= 2; i++ {

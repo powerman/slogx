@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-04-07
+
+### 📦️ Dependencies
+
+- **(deps)** Upgrade by @powerman in [2619dd2]
+
+[0.2.2]: https://github.com/powerman/slogx/compare/v0.2.1..v0.2.2
+[2619dd2]: https://github.com/powerman/slogx/commit/2619dd2bb841b2a3b3197b0acb4e359ab3712d4e
+
 ## [0.2.1] - 2025-10-14
 
 ### 📚 Documentation

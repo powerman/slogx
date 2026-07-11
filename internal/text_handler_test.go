@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var testTime = time.Date(2000, 1, 2, 3, 4, 5, 0, time.UTC)
+var testTime = time.Date(2000, time.January, 2, 3, 4, 5, 0, time.UTC)
 
 func TestTextHandler(t *testing.T) {
 	for _, test := range []struct {
@@ -84,7 +84,8 @@ func TestTextHandler(t *testing.T) {
 					h := NewTextHandler(&buf, &opts.opts)
 					r := NewRecord(testTime, LevelInfo, "a message", 0)
 					r.AddAttrs(test.attr)
-					if err := h.Handle(context.Background(), r); err != nil {
+					err := h.Handle(context.Background(), r)
+					if err != nil {
 						t.Fatal(err)
 					}
 					got := buf.String()
@@ -100,14 +101,14 @@ func TestTextHandler(t *testing.T) {
 	}
 }
 
-// for testing fmt.Sprint
+// for testing fmt.Sprint.
 type name struct {
 	First, Last string
 }
 
 func (n name) String() string { return n.Last + ", " + n.First }
 
-// for testing TextMarshaler
+// for testing TextMarshaler.
 type text struct {
 	s string
 }
@@ -128,7 +129,8 @@ func TestTextHandlerPreformatted(t *testing.T) {
 	// Also test omitting time.
 	r := NewRecord(time.Time{}, 0 /* 0 Level is INFO */, "m", 0)
 	r.AddAttrs(Int("a", 1))
-	if err := h.Handle(context.Background(), r); err != nil {
+	err := h.Handle(context.Background(), r)
+	if err != nil {
 		t.Fatal(err)
 	}
 	got := strings.TrimSuffix(buf.String(), "\n")

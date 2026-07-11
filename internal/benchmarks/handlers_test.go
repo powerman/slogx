@@ -19,7 +19,8 @@ func TestHandlers(t *testing.T) {
 	t.Run("text", func(t *testing.T) {
 		var b bytes.Buffer
 		h := newFastTextHandler(&b)
-		if err := h.Handle(ctx, r); err != nil {
+		err := h.Handle(ctx, r)
+		if err != nil {
 			t.Fatal(err)
 		}
 		got := b.String()
@@ -29,7 +30,8 @@ func TestHandlers(t *testing.T) {
 	})
 	t.Run("async", func(t *testing.T) {
 		h := newAsyncHandler()
-		if err := h.Handle(ctx, r); err != nil {
+		err := h.Handle(ctx, r)
+		if err != nil {
 			t.Fatal(err)
 		}
 		got := h.ringBuffer[0]

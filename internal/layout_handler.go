@@ -389,7 +389,6 @@ func (s *handleState) appendNonBuiltIns(r Record) {
 			s.bufStart = s.h.preformattedAttrsStart
 		}
 		s.buf.Write(pfa)
-
 	}
 	// Attrs in Record -- unlike the built-in ones, they are in groups started
 	// from WithGroup.

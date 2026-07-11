@@ -47,10 +47,12 @@ func TestConcurrentWrites(t *testing.T) {
 				sub2Record := NewRecord(time.Time{}, LevelInfo, "hello from sub2", 0)
 				sub2Record.AddAttrs(Int("i", i))
 				wg.Go(func() {
-					if err := sub1.Handle(ctx, sub1Record); err != nil {
+					err := sub1.Handle(ctx, sub1Record)
+					if err != nil {
 						t.Error(err)
 					}
-					if err := sub2.Handle(ctx, sub2Record); err != nil {
+					err = sub2.Handle(ctx, sub2Record)
+					if err != nil {
 						t.Error(err)
 					}
 				})
@@ -293,7 +295,7 @@ func TestJSONAndTextHandlers(t *testing.T) {
 		{
 			name:     "GroupValue as Attr value",
 			replace:  removeKeys(TimeKey, LevelKey),
-			attrs:    []Attr{{"v", AnyValue(IntValue(3))}},
+			attrs:    []Attr{{Key: "v", Value: AnyValue(IntValue(3))}},
 			wantText: "msg=message v=3",
 			wantJSON: `{"msg":"message","v":3}`,
 		},
@@ -435,7 +437,7 @@ func TestJSONAndTextHandlers(t *testing.T) {
 			name: "replace resolved group",
 			replace: func(groups []string, a Attr) Attr {
 				if a.Value.Kind() == KindGroup {
-					return Attr{"bad", IntValue(1)}
+					return Attr{Key: "bad", Value: IntValue(1)}
 				}
 				return removeKeys(TimeKey, LevelKey, MessageKey)(groups, a)
 			},
@@ -482,7 +484,8 @@ func TestJSONAndTextHandlers(t *testing.T) {
 						h = test.with(h)
 					}
 					buf.Reset()
-					if err := h.Handle(nil, r); err != nil {
+					err := h.Handle(nil, r)
+					if err != nil {
 						t.Fatal(err)
 					}
 					want := strings.ReplaceAll(handler.want, "$LINE", line)
@@ -656,9 +659,9 @@ const rfc3339Millis = "2006-01-02T15:04:05.000Z07:00"
 
 func TestWriteTimeRFC3339(t *testing.T) {
 	for _, tm := range []time.Time{
-		time.Date(2000, 1, 2, 3, 4, 5, 0, time.UTC),
-		time.Date(2000, 1, 2, 3, 4, 5, 400, time.Local),
-		time.Date(2000, 11, 12, 3, 4, 500, 5e7, time.UTC),
+		time.Date(2000, time.January, 2, 3, 4, 5, 0, time.UTC),
+		time.Date(2000, time.January, 2, 3, 4, 5, 400, time.Local),
+		time.Date(2000, time.November, 12, 3, 4, 500, 5e7, time.UTC),
 	} {
 		got := string(appendRFC3339Millis(nil, tm))
 		want := tm.Format(rfc3339Millis)
@@ -669,10 +672,10 @@ func TestWriteTimeRFC3339(t *testing.T) {
 }
 
 func BenchmarkWriteTime(b *testing.B) {
-	tm := time.Date(2022, 3, 4, 5, 6, 7, 823456789, time.Local)
+	tm := time.Date(2022, time.March, 4, 5, 6, 7, 823456789, time.Local)
 	b.ResetTimer()
 	var buf []byte
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		buf = appendRFC3339Millis(buf[:0], tm)
 	}
 }

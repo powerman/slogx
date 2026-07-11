@@ -3,6 +3,7 @@ package slogx
 import (
 	"iter"
 	"log/slog"
+	"slices"
 
 	"github.com/powerman/slogx/internal"
 )
@@ -93,8 +94,8 @@ func (g *GroupOrAttrs) All() iter.Seq2[string, slog.Attr] {
 		// Collect groups and attrs in reverse order.
 		// We will yield them in reverse order again to restore the original order.
 		reverse := g.reverse()
-		for i := len(reverse) - 1; i >= 0; i-- {
-			cur := reverse[i]
+		for _, v := range slices.Backward(reverse) {
+			cur := v
 			if cur.group != "" {
 				if !yield(cur.group, slog.Attr{}) {
 					return

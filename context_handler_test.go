@@ -145,7 +145,7 @@ func TestContextMiddleware(tt *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
 	ctx := t.Context()
-	setBase := func(baseCtx context.Context) { ctx = baseCtx } //nolint:fatcontext // False positive.
+	setBase := func(baseCtx context.Context) { ctx = baseCtx }
 
 	log := slog.New(slogmulti.
 		Pipe(slogx.NewContextMiddleware(ctx, setBase)).

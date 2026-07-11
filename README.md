@@ -14,6 +14,8 @@
 
 ## Features
 
+- Zero required external dependencies.
+
 ### LayoutHandler
 
 `LayoutHandler` is an alternative to `slog.TextHandler`

@@ -10,8 +10,7 @@ import (
 	"github.com/powerman/slogx"
 )
 
-func TestGroupOrAttrs_Total(tt *testing.T) {
-	t := check.T(tt)
+func TestGroupOrAttrs_Total(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -61,14 +60,14 @@ func TestGroupOrAttrs_Total(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			t.Equal(tc.goa.Total(), tc.want)
 		})
 	}
 }
 
-func TestGroupOrAttrs_WithAttrs(tt *testing.T) {
-	t := check.T(tt)
+func TestGroupOrAttrs_WithAttrs(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -122,15 +121,15 @@ func TestGroupOrAttrs_WithAttrs(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			result := tc.goa.WithAttrs(tc.attrs)
 			t.Equal(result.Total(), tc.want)
 		})
 	}
 }
 
-func TestGroupOrAttrs_WithGroup(tt *testing.T) {
-	t := check.T(tt)
+func TestGroupOrAttrs_WithGroup(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -172,15 +171,15 @@ func TestGroupOrAttrs_WithGroup(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			result := tc.goa.WithGroup(tc.group)
 			t.Equal(result.Total(), tc.want)
 		})
 	}
 }
 
-func TestGroupOrAttrs_Record(tt *testing.T) {
-	t := check.T(tt)
+func TestGroupOrAttrs_Record(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -262,7 +261,8 @@ func TestGroupOrAttrs_Record(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			result := tc.goa.Record(tc.r)
 			got := collectAttrs(result)
 			t.DeepEqual(got, tc.want)
@@ -270,8 +270,7 @@ func TestGroupOrAttrs_Record(tt *testing.T) {
 	}
 }
 
-func TestGroupOrAttrs_All(tt *testing.T) {
-	t := check.T(tt)
+func TestGroupOrAttrs_All(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -329,7 +328,8 @@ func TestGroupOrAttrs_All(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			var gotKeys []string
 			var gotAttrs []slog.Attr
 			for key, attr := range tc.goa.All() {
@@ -343,8 +343,8 @@ func TestGroupOrAttrs_All(tt *testing.T) {
 }
 
 func TestGroupOrAttrs_All_EarlyStop(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 
 	goa := new(slogx.GroupOrAttrs).
 		WithAttrs([]slog.Attr{slog.Int("a", 1)}).
@@ -362,8 +362,8 @@ func TestGroupOrAttrs_All_EarlyStop(tt *testing.T) {
 }
 
 func TestGroupOrAttrs_Immutability(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 
 	goa1 := new(slogx.GroupOrAttrs).WithAttrs([]slog.Attr{slog.Int("a", 1)})
 	goa2 := goa1.WithGroup("g1")
@@ -381,8 +381,7 @@ func TestGroupOrAttrs_Immutability(tt *testing.T) {
 	t.DeepEqual(keys1, []string{""})
 }
 
-func TestGroupOrAttrs_WithAttrs_Unchanged(tt *testing.T) {
-	t := check.T(tt)
+func TestGroupOrAttrs_WithAttrs_Unchanged(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -418,7 +417,8 @@ func TestGroupOrAttrs_WithAttrs_Unchanged(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			result := tc.goa.WithAttrs(tc.attrs)
 			// Should return same instance or equivalent
 			t.Equal(result.Total(), tc.goa.Total())
@@ -426,8 +426,7 @@ func TestGroupOrAttrs_WithAttrs_Unchanged(tt *testing.T) {
 	}
 }
 
-func TestGroupOrAttrs_WithGroup_Unchanged(tt *testing.T) {
-	t := check.T(tt)
+func TestGroupOrAttrs_WithGroup_Unchanged(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -449,7 +448,8 @@ func TestGroupOrAttrs_WithGroup_Unchanged(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			result := tc.goa.WithGroup("")
 			// Should return same instance
 			t.Equal(result, tc.goa)
@@ -458,8 +458,8 @@ func TestGroupOrAttrs_WithGroup_Unchanged(tt *testing.T) {
 }
 
 func TestGroupOrAttrs_Record_PreservesRecordAttrs(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 
 	goa := new(slogx.GroupOrAttrs).
 		WithAttrs([]slog.Attr{slog.Int("b", 2)}).
@@ -479,8 +479,8 @@ func TestGroupOrAttrs_Record_PreservesRecordAttrs(tt *testing.T) {
 }
 
 func TestGroupOrAttrs_Reverse(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 
 	goa := new(slogx.GroupOrAttrs).
 		WithAttrs([]slog.Attr{slog.Int("a", 1)}).
@@ -510,8 +510,8 @@ func TestGroupOrAttrs_Reverse(tt *testing.T) {
 }
 
 func TestGroupOrAttrs_ChainedOperations(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 
 	// Test complex chaining scenario
 	goa := new(slogx.GroupOrAttrs).

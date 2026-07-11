@@ -18,7 +18,7 @@ func removeTime(groups []string, a slog.Attr) slog.Attr {
 	return a
 }
 
-func makeTextResults(t *check.C, buf *bytes.Buffer) func() []map[string]any {
+func makeTextResults(t *check.TB, buf *bytes.Buffer) func() []map[string]any {
 	t.Helper()
 	ident := `("[^"]*"|[^"]\S*)`
 	attr := fmt.Sprintf(`%s=%s`, ident, ident)

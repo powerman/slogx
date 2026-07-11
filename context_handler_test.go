@@ -15,16 +15,16 @@ import (
 )
 
 func TestContextHandler(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 	var buf bytes.Buffer
 	_, h := slogx.NewContextHandler(t.Context(), slog.NewTextHandler(&buf, nil))
 	t.Nil(slogtest.TestHandler(h, makeTextResults(t, &buf)))
 }
 
+//nolint:paralleltest // Calls SetDefaultContextHandler.
 func TestContextHandler_Enabled(tt *testing.T) {
-	t := check.T(tt)
-	// Tests calling SetDefaultContextHandler must not use t.Parallel().
+	t := check.Must(tt)
 
 	h := slog.NewTextHandler(os.Stdout, nil)
 	ctx := slogx.SetDefaultContextHandler(t.Context(), h)
@@ -41,9 +41,9 @@ func TestContextHandler_Enabled(tt *testing.T) {
 	t.True(slog.Default().Enabled(ctx, slog.LevelError))
 }
 
+//nolint:paralleltest // Calls SetDefaultContextHandler.
 func TestContextHandler_Smoke(tt *testing.T) {
-	t := check.T(tt)
-	// Tests calling SetDefaultContextHandler must not use t.Parallel().
+	t := check.Must(tt)
 
 	var buf bytes.Buffer
 	var h slog.Handler
@@ -96,9 +96,9 @@ func TestContextHandler_Smoke(tt *testing.T) {
 	t.DeepEqual(handler.WithGroup(""), handler)
 }
 
+//nolint:paralleltest // Calls SetDefaultContextHandler.
 func TestContextWith(tt *testing.T) {
-	t := check.T(tt)
-	// Tests calling SetDefaultContextHandler must not use t.Parallel().
+	t := check.Must(tt)
 
 	var buf bytes.Buffer
 	ctx := slogx.SetDefaultContextHandler(t.Context(), slog.NewTextHandler(&buf, nil))
@@ -124,9 +124,9 @@ func TestContextWith(tt *testing.T) {
 	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4 g1.g2.k5=v5 g1.g2.k6=6\n$`)
 }
 
+//nolint:paralleltest // Calls SetDefaultContextHandler.
 func TestLaxContextHandler(tt *testing.T) {
-	t := check.T(tt)
-	// Tests calling SetDefaultContextHandler must not use t.Parallel().
+	t := check.Must(tt)
 
 	var buf bytes.Buffer
 	h := slog.NewTextHandler(&buf, nil).WithAttrs([]slog.Attr{slog.String("key1", "value1")})
@@ -141,8 +141,8 @@ func TestLaxContextHandler(tt *testing.T) {
 }
 
 func TestContextMiddleware(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 	var buf bytes.Buffer
 	ctx := t.Context()
 	setBase := func(baseCtx context.Context) { ctx = baseCtx }
@@ -155,9 +155,9 @@ func TestContextMiddleware(tt *testing.T) {
 	t.Match(buf.String(), `level=INFO msg=Test middleware=true a=1 g.b=2`)
 }
 
+//nolint:paralleltest // Calls SetDefaultContextHandler.
 func TestNewDefaultContextLogger(tt *testing.T) {
-	t := check.T(tt)
-	// Tests calling SetDefaultContextHandler must not use t.Parallel().
+	t := check.Must(tt)
 	var buf bytes.Buffer
 
 	ctx := slogx.SetDefaultContextHandler(t.Context(), slog.NewTextHandler(&buf, nil))

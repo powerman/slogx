@@ -11,7 +11,8 @@ import (
 )
 
 func TestReplaceAttr(tt *testing.T) {
-	t := check.T(tt)
+	tt.Parallel()
+	t := check.Must(tt)
 
 	var (
 		id     = "ID"

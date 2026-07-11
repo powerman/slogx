@@ -14,8 +14,8 @@ import (
 )
 
 func TestLogSkip(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 
 	var buf bytes.Buffer
 	ctx := context.Background()
@@ -37,8 +37,8 @@ func TestLogSkip(tt *testing.T) {
 }
 
 func TestLogAttrsSkip(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 
 	var buf bytes.Buffer
 	ctx := context.Background()
@@ -62,8 +62,8 @@ func TestLogAttrsSkip(tt *testing.T) {
 }
 
 func TestLogSkipCtx(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 	ctrl := gomock.NewController(t)
 
 	h := NewMockHandler(ctrl)
@@ -74,8 +74,8 @@ func TestLogSkipCtx(tt *testing.T) {
 }
 
 func TestLogAttrsSkipCtx(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 	ctrl := gomock.NewController(t)
 
 	h := NewMockHandler(ctrl)

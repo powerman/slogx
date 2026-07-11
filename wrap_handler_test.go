@@ -14,8 +14,7 @@ import (
 	"github.com/powerman/slogx"
 )
 
-func TestWrapHandler(tt *testing.T) {
-	t := check.T(tt)
+func TestWrapHandler(t *testing.T) {
 	t.Parallel()
 
 	enabledProxy := func(ctx context.Context, l slog.Level, _ *slogx.GroupOrAttrs, next slog.Handler) bool {
@@ -42,8 +41,8 @@ func TestWrapHandler(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(fmt.Sprint(tc), func(tt *testing.T) {
-			t := check.T(tt)
-			t.Parallel()
+			tt.Parallel()
+			t := check.Must(tt)
 			var buf bytes.Buffer
 			next := slog.NewTextHandler(&buf, nil)
 			h := slogx.NewWrapHandler(next, tc)
@@ -53,8 +52,8 @@ func TestWrapHandler(tt *testing.T) {
 }
 
 func TestWrapMiddleware(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 	var buf bytes.Buffer
 	enabledProxy := func(_ context.Context, _ slog.Level, _ *slogx.GroupOrAttrs, _ slog.Handler) bool {
 		return true

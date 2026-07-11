@@ -21,9 +21,9 @@ func newLog(fs ...func([]string, slog.Attr) slog.Attr) (*slog.Logger, *bytes.Buf
 	return log, &buf
 }
 
+//nolint:paralleltest // Subtests share buf and must run sequentially.
 func TestErrorAttrs_NewError(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	t := check.Must(tt)
 	var (
 		log, buf = newLog(slogx.ErrorAttrs())
 		args     = []any{"k1", "v1", slog.String("k2", "v2")}
@@ -49,8 +49,8 @@ func TestErrorAttrs_NewError(tt *testing.T) {
 		{err4, "k3=3 k4=4 err=EOF"},
 	}
 	for _, tc := range tests {
-		t.Run("", func(tt *testing.T) {
-			t := check.T(tt)
+		tt.Run("", func(tt *testing.T) {
+			t := check.Must(tt)
 
 			buf.Reset()
 			log.Info("Msg", "err", tc.err)
@@ -62,8 +62,7 @@ func TestErrorAttrs_NewError(tt *testing.T) {
 	}
 }
 
-func TestErrorAttrs_ReturnOriginal(tt *testing.T) {
-	t := check.T(tt)
+func TestErrorAttrs_ReturnOriginal(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -77,7 +76,8 @@ func TestErrorAttrs_ReturnOriginal(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.attr.Key, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			attr := slogx.ErrorAttrs()(nil, tc.attr)
 			t.True(tc.attr.Equal(attr))
 		})
@@ -85,17 +85,16 @@ func TestErrorAttrs_ReturnOriginal(tt *testing.T) {
 }
 
 func TestErrorAttrs_ExpandOnce(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 	log, buf := newLog(slogx.ErrorAttrs(), slogx.ErrorAttrs()) //nolint:gocritic // By design.
 
 	log.Info("Msg", "err", slogx.NewError(io.EOF, "k", "v"))
 	t.Equal(buf.String(), "level=INFO msg=Msg k=v err=EOF\n")
 }
 
-func TestErrorAttrs_Wrapped(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+//nolint:paralleltest // Subtests share buf and must run sequentially.
+func TestErrorAttrs_Wrapped(t *testing.T) {
 	var (
 		log, buf = newLog(slogx.ErrorAttrs())
 		err1     = slogx.NewError(io.EOF, "k1", 1, "k2", 2)
@@ -115,7 +114,7 @@ func TestErrorAttrs_Wrapped(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run("", func(tt *testing.T) {
-			t := check.T(tt)
+			t := check.Must(tt)
 
 			buf.Reset()
 			log.Info("Msg", "err", tc.err)
@@ -124,9 +123,8 @@ func TestErrorAttrs_Wrapped(tt *testing.T) {
 	}
 }
 
-func TestErrorAttrs_Join(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+//nolint:paralleltest // Subtests share buf and must run sequentially.
+func TestErrorAttrs_Join(t *testing.T) {
 	var (
 		log, buf     = newLog(slogx.ErrorAttrs())
 		err1         = slogx.NewError(io.EOF, "k1", 1, "k2", 2)
@@ -176,7 +174,7 @@ func TestErrorAttrs_Join(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run("", func(tt *testing.T) {
-			t := check.T(tt)
+			t := check.Must(tt)
 
 			buf.Reset()
 			log.Info("Msg", "err", tc.err)
@@ -185,8 +183,7 @@ func TestErrorAttrs_Join(tt *testing.T) {
 	}
 }
 
-func TestErrorAttrs_Group(tt *testing.T) {
-	t := check.T(tt)
+func TestErrorAttrs_Group(t *testing.T) {
 	t.Parallel()
 	err := slogx.NewError(io.EOF, "k1", 1)
 
@@ -213,7 +210,8 @@ func TestErrorAttrs_Group(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run("", func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			log, buf := newLog(slogx.ErrorAttrs(tc.opts...))
 			log.Info("Msg",
 				slog.Int("k3", 3), slog.Any("err", err),

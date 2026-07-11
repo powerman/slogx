@@ -13,8 +13,8 @@ import (
 )
 
 func TestErrorStack(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 	reStack := regexp.MustCompile(`^goroutine \d+ \[\S+\]:\ngithub\.com/powerman/slogx_test\.TestErrorStack[(](.|\n)*[^\n]$`)
 
 	stack := slogx.ErrorStack()
@@ -22,9 +22,9 @@ func TestErrorStack(tt *testing.T) {
 	t.Match(stack.Value, reStack)
 }
 
+//nolint:paralleltest // Modifies the default logger.
 func TestStack(tt *testing.T) {
-	t := check.T(tt)
-	// Do not run in parallel because it modifies the default logger.
+	t := check.Must(tt)
 	reStack := regexp.MustCompile(`^goroutine \d+ \[\S+\]:\ngithub\.com/powerman/slogx_test\.TestStack\((.|\n)*[^\n]$`)
 	reLog := regexp.MustCompile(`^time=\S+ level=INFO msg=Test\ngoroutine \d+ \[\S+\]:\ngithub\.com/powerman/slogx_test\.TestStack\((.|\n)*[^\n]\n$`)
 
@@ -44,9 +44,9 @@ func TestStack(tt *testing.T) {
 	t.Match(buf.String(), reLog)
 }
 
+//nolint:paralleltest // Modifies the default logger.
 func TestStackSkip(tt *testing.T) {
-	t := check.T(tt)
-	// Do not run in parallel because it modifies the default logger.
+	t := check.Must(tt)
 	var buf bytes.Buffer
 	slog.SetDefault(slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
 		Format: map[string]string{slogx.StackKey: "\n%s"},

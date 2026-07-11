@@ -19,16 +19,15 @@ import (
 )
 
 func TestLayoutHandler(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+	tt.Parallel()
+	t := check.Must(tt)
 	var buf bytes.Buffer
 	h := slogx.NewLayoutHandler(&buf, nil)
 	t.Nil(slogtest.TestHandler(h, makeTextResults(t, &buf)))
 }
 
-func TestLayoutHandler_StdOptions(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+//nolint:paralleltest // Subtests share buf and must run sequentially.
+func TestLayoutHandler_StdOptions(t *testing.T) {
 	var buf bytes.Buffer
 
 	tests := []struct {
@@ -43,7 +42,7 @@ func TestLayoutHandler_StdOptions(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run("", func(tt *testing.T) {
-			t := check.T(tt)
+			t := check.Must(tt)
 			buf.Reset()
 			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
 				AddSource:   tc.addSource,
@@ -57,8 +56,7 @@ func TestLayoutHandler_StdOptions(tt *testing.T) {
 	}
 }
 
-func TestLayoutHandler_BadFormat(tt *testing.T) {
-	t := check.T(tt)
+func TestLayoutHandler_BadFormat(t *testing.T) {
 	t.Parallel()
 
 	type F = map[string]string
@@ -142,7 +140,8 @@ func TestLayoutHandler_BadFormat(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			tt.Parallel()
+			t := check.Must(tt)
 			t.PanicMatch(func() {
 				_ = slogx.NewLayoutHandler(io.Discard, &slogx.LayoutHandlerOptions{
 					Format: tc.format,
@@ -152,9 +151,8 @@ func TestLayoutHandler_BadFormat(tt *testing.T) {
 	}
 }
 
-func TestLayoutHandler_Format(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+//nolint:paralleltest // Subtests share buf and must run sequentially.
+func TestLayoutHandler_Format(t *testing.T) {
 	var buf bytes.Buffer
 
 	//nolint:gosmopolitan // Han script can't be enabled in config.
@@ -454,7 +452,7 @@ func TestLayoutHandler_Format(tt *testing.T) {
 		}
 		for _, format := range formats {
 			t.Run(format, func(tt *testing.T) {
-				t := check.T(tt)
+				t := check.Must(tt)
 				buf.Reset()
 				logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
 					Format: map[string]string{
@@ -474,9 +472,8 @@ func TestLayoutHandler_Format(tt *testing.T) {
 	}
 }
 
-func TestLayoutHandler_FormatSpecial(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+//nolint:paralleltest // Subtests share buf and must run sequentially.
+func TestLayoutHandler_FormatSpecial(t *testing.T) {
 	var buf bytes.Buffer
 
 	type F = map[string]string
@@ -516,7 +513,7 @@ func TestLayoutHandler_FormatSpecial(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%s %+v", tc.level, tc.format), func(tt *testing.T) {
-			t := check.T(tt)
+			t := check.Must(tt)
 			buf.Reset()
 			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
 				Format: tc.format,
@@ -535,9 +532,8 @@ func TestLayoutHandler_FormatSpecial(tt *testing.T) {
 	}
 }
 
-func TestLayoutHandler_Layout(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+//nolint:paralleltest // Subtests share buf and must run sequentially.
+func TestLayoutHandler_Layout(t *testing.T) {
 	var buf bytes.Buffer
 
 	type F = map[string]string
@@ -702,7 +698,7 @@ func TestLayoutHandler_Layout(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			t := check.Must(tt)
 
 			opts1 := slogx.LayoutHandlerOptions{
 				Format:     tc.format,
@@ -725,9 +721,8 @@ func TestLayoutHandler_Layout(tt *testing.T) {
 	}
 }
 
-func TestLayoutHandler_LayoutWith(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+//nolint:paralleltest // Subtests share buf and logger, must run sequentially.
+func TestLayoutHandler_LayoutWith(t *testing.T) {
 	var buf bytes.Buffer
 	logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
 		Format: map[string]string{
@@ -804,7 +799,7 @@ func TestLayoutHandler_LayoutWith(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
-			t := check.T(tt)
+			t := check.Must(tt)
 			buf.Reset()
 			tc.f()
 			got := buf.String()
@@ -815,8 +810,7 @@ func TestLayoutHandler_LayoutWith(tt *testing.T) {
 	}
 }
 
-func TestLayoutHandler_AttrSep(tt *testing.T) {
-	t := check.T(tt)
+func TestLayoutHandler_AttrSep(t *testing.T) {
 	t.Parallel()
 
 	const (
@@ -887,8 +881,8 @@ func TestLayoutHandler_AttrSep(tt *testing.T) {
 				// - removal by format "" vs replaceAttr (opts1/2 vs opts3/4)
 				// - single vs multiple attributes in each group (amount)
 				t.Run(fmt.Sprintf("%06b opts%d %s", attrMask, i, amount), func(tt *testing.T) {
-					t := check.T(tt)
-					t.Parallel()
+					tt.Parallel()
+					t := check.Must(tt)
 					var buf bytes.Buffer
 					logger := slog.New(slogx.NewLayoutHandler(&buf, &opts))
 
@@ -996,9 +990,8 @@ func optsFormatToReplaceAttr(opts slogx.LayoutHandlerOptions) slogx.LayoutHandle
 	}
 }
 
-func TestLayoutHandler_TimeFormat(tt *testing.T) {
-	t := check.T(tt)
-	t.Parallel()
+//nolint:paralleltest // Subtests share buf and must run sequentially.
+func TestLayoutHandler_TimeFormat(t *testing.T) {
 	var buf bytes.Buffer
 
 	tests := []struct {
@@ -1033,7 +1026,7 @@ func TestLayoutHandler_TimeFormat(tt *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%s %s", tc.recordTimeFormat, tc.timeFormat), func(tt *testing.T) {
-			t := check.T(tt)
+			t := check.Must(tt)
 			buf.Reset()
 			now, _ := time.Parse(time.RFC3339Nano, "2006-01-02T15:04:05.789123456+01:00")
 			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
@@ -1112,7 +1105,7 @@ func BenchmarkLayout(b *testing.B) {
 	}{
 		{"all-opts", slogx.NewLayoutHandler(io.Discard, &opts)},
 		{"no-opts", slogx.NewLayoutHandler(io.Discard, nil)},
-		{"std-text", slog.NewTextHandler(io.Discard, nil)}, //nolint:sloglint // Benchmark.
+		{"std-text", slog.NewTextHandler(io.Discard, nil)},
 	} {
 		logger := slog.New(handler.h)
 		b.Run(handler.name, func(b *testing.B) {

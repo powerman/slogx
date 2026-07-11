@@ -26,6 +26,12 @@ import (
 // Separator for attrs.
 const attrSep = ' '
 
+// Preallocated capacities, chosen to cover typical usage without resizing.
+const (
+	layoutAttrBufPrealloc = 32 // Preformatted prefix/suffix attr value.
+	groupsSlicePrealloc   = 10 // Nesting depth of groups seen by ReplaceAttr.
+)
+
 // AttrFormat specifies how to format an attribute.
 //
 // Value {MaxWidth: -1} results in outputting just the value, without attrSep, key and '='.
@@ -43,8 +49,10 @@ type AttrFormat struct {
 	SkipQuote      bool   // Do not quote the value, even if needed.
 }
 
+//nolint:gochecknoglobals // Shared read-only value, reused to avoid allocating it on every call.
 var noFormat = AttrFormat{MaxWidth: -1}
 
+// LayoutHandlerOptions contains options for [NewLayoutHandler].
 type LayoutHandlerOptions struct {
 	// AddSource causes the handler to compute the source code position
 	// of the log statement and add a SourceKey attribute to the output.
@@ -163,7 +171,7 @@ func (la layoutAttrs) buffer(key string, opts *LayoutHandlerOptions) *buffer.Buf
 		}
 		i += len(opts.PrefixKeys)
 	}
-	la[i] = make([]byte, 0, 32) // replace old value, preallocate some space
+	la[i] = make([]byte, 0, layoutAttrBufPrealloc) // replace old value, preallocate some space
 	return (*buffer.Buffer)(&la[i])
 }
 
@@ -175,6 +183,7 @@ const (
 	sepIncluded                      // first attr has Format (does not need attrSep)
 )
 
+// LayoutHandler is a handler created by [NewLayoutHandler].
 type LayoutHandler struct {
 	opts                   *LayoutHandlerOptions
 	layoutAttrs            layoutAttrs // preformatted prefix and suffix attrs
@@ -248,6 +257,7 @@ func (h *LayoutHandler) Enabled(_ context.Context, l Level) bool {
 	return l >= minLevel
 }
 
+// WithAttrs implements [Handler].
 func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 	// We are going to ignore empty groups, so if the entire slice consists of
 	// them, there is nothing to do.
@@ -266,6 +276,7 @@ func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 	return h2
 }
 
+// WithGroup implements [Handler].
 func (h *LayoutHandler) WithGroup(name string) Handler {
 	if name == "" {
 		return h
@@ -279,6 +290,8 @@ func (h *LayoutHandler) WithGroup(name string) Handler {
 
 // Handle is the internal implementation of Handler.Handle
 // used by TextHandler and LayoutHandler.
+//
+//nolint:funlen,gocognit // Inherent to assembling time/level/source/message/prefix/suffix in one pass.
 func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	var state *handleState
 	if r.NumAttrs() == 0 {
@@ -338,6 +351,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	state.appendNonBuiltIns(r)
 
 	buf := state.buf
+	//nolint:nestif // Inserting prefix attrs before the message requires this branching.
 	if state.layoutAttrs.hasPrefix(h.opts) {
 		buf = buffer.New()
 		defer buf.Free()
@@ -377,8 +391,20 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	return err
 }
 
+// handleState holds state for a single call to LayoutHandler.Handle.
+type handleState struct {
+	h           *LayoutHandler
+	layoutAttrs layoutAttrs
+	buf         *buffer.Buffer
+	freeBuf     bool // should buf be freed?
+	bufStart    startSepState
+	prefix      *buffer.Buffer // key prefix
+	groups      *[]string      // pool-allocated slice of active groups, for ReplaceAttr
+}
+
 func (s *handleState) appendNonBuiltIns(r Record) {
 	// preformatted Attrs
+	//nolint:nestif // Tracking the attrSep/bufStart state requires this branching.
 	if pfa := s.h.preformattedAttrs; len(pfa) > 0 {
 		if len(*s.buf) > 0 && s.h.preformattedAttrsStart == sepSkipped {
 			s.buf.WriteByte(attrSep)
@@ -402,23 +428,12 @@ func (s *handleState) appendNonBuiltIns(r Record) {
 	}
 }
 
-// handleState holds state for a single call to LayoutHandler.Handle.
-type handleState struct {
-	h           *LayoutHandler
-	layoutAttrs layoutAttrs
-	buf         *buffer.Buffer
-	freeBuf     bool // should buf be freed?
-	bufStart    startSepState
-	prefix      *buffer.Buffer // key prefix
-	groups      *[]string      // pool-allocated slice of active groups, for ReplaceAttr
-}
-
-var groupPool = sync.Pool{New: func() any {
-	s := make([]string, 0, 10)
+var groupPool = sync.Pool{New: func() any { //nolint:gochecknoglobals // sync.Pool must be package-level.
+	s := make([]string, 0, groupsSlicePrealloc)
 	return &s
 }}
 
-var handleStatePool = sync.Pool{New: func() any {
+var handleStatePool = sync.Pool{New: func() any { //nolint:gochecknoglobals // sync.Pool must be package-level.
 	return &handleState{}
 }}
 
@@ -482,6 +497,8 @@ func (s *handleState) appendAttrs(as []Attr) {
 // appendAttr appends the Attr's key and value.
 // It handles replacement and checking for an empty key.
 // It reports whether something was appended.
+//
+//nolint:gocognit // Handles group inlining, ReplaceAttr, Source and layout redirection in one pass.
 func (s *handleState) appendAttr(a Attr) {
 	a.Value = a.Value.Resolve()
 	if rep := s.h.opts.ReplaceAttr; rep != nil && a.Value.Kind() != KindGroup {
@@ -507,6 +524,7 @@ func (s *handleState) appendAttr(a Attr) {
 			a.Value = StringValue(fmt.Sprintf("%s:%d", src.File, src.Line))
 		}
 	}
+	//nolint:nestif // Inlining a group with an empty key requires this branching.
 	if a.Value.Kind() == KindGroup {
 		attrs := a.Value.Group()
 		// Output only non-empty groups.
@@ -587,6 +605,7 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 	}
 }
 
+//nolint:funlen,gocognit // Truncation with quoting/ellipsis/alignment inherently branches a lot.
 func (s *handleState) appendFormatValue(key string, v Value, format AttrFormat) {
 	pos := s.buf.Len()
 	s.appendValue(key, v, format)
@@ -603,6 +622,7 @@ func (s *handleState) appendFormatValue(key string, v Value, format AttrFormat) 
 	// The first rune is MaxWidth-1 from the end for unquoted values and
 	// MaxWidth-2 from the end for quoted values.
 	startPos := pos
+	//nolint:nestif // Computing cutPos/startPos for both truncation directions needs this branching.
 	if nMax := max(format.MinWidth, format.MaxWidth); nMax > 0 {
 		var sizes []int // Ring buffer of rune sizes for Alternate.
 		if format.TruncFromStart && format.MaxWidth > 0 {
@@ -629,10 +649,11 @@ func (s *handleState) appendFormatValue(key string, v Value, format AttrFormat) 
 		if len(sizes) > 0 && n > format.MaxWidth {
 			startPos += sizes[(n+1)%len(sizes)] // Skip 1 for … marker.
 			if quoted && len(sizes) > 1 {
-				startPos += sizes[(n+2)%len(sizes)] // Skip 1 for opening quote.
+				startPos += sizes[(n+2)%len(sizes)] //nolint:mnd // Skip 1 for opening quote, on top of the …  marker above.
 			}
 		}
 	}
+	//nolint:nestif // Truncation has separate quoted/unquoted and start/end cases.
 	if w := format.MaxWidth; w > 0 && n > w {
 		if format.TruncFromStart {
 			switch {
@@ -668,7 +689,7 @@ func (s *handleState) appendFormatValue(key string, v Value, format AttrFormat) 
 				s.buf.WriteString(`…`)
 			case w == 1:
 				s.buf.WriteString(`…`)
-			case w == 2:
+			case w == 2: //nolint:mnd // Width in runes for the "two ellipsis chars, no quotes fit" case.
 				s.buf.WriteString(`……`)
 			default:
 				s.buf.WriteString(`…"`)
@@ -757,7 +778,7 @@ func appendRFC3339Millis(b []byte, t time.Time) []byte {
 	// to guarantee that there are exactly 4 digits after the period.
 	const prefixLen = len("2006-01-02T15:04:05.000")
 	n := len(b)
-	t = t.Truncate(time.Millisecond).Add(time.Millisecond / 10)
+	t = t.Truncate(time.Millisecond).Add(time.Millisecond / 10) //nolint:mnd // 1/10 millisecond, see comment above.
 	b = t.AppendFormat(b, time.RFC3339Nano)
 	b = append(b[:n+prefixLen], b[n+prefixLen+1:]...) // drop the 4th digit
 	return b

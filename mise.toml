@@ -9,6 +9,10 @@ go = 'latest'
 # MockGen generates mock implementations of Go interfaces.
 'go:go.uber.org/mock/mockgen' = 'latest'
 
+#--- Format
+# Opinionated Code Formatter.
+prettier = 'latest'
+
 #--- Lint
 # Static checker for GitHub Actions workflow files.
 actionlint = 'latest'
@@ -53,19 +57,24 @@ description = 'Run all tests'
 depends = ['test:*']
 
 [tasks.default]
-description = 'Run all linters and tests'
-depends = ['lint', 'test']
+description = 'Run all formatters, linters and tests'
+depends = ['fmt', 'lint', 'test']
 
 [tasks.ci]
 description = 'Run all CI tasks'
 depends = ['generate', 'fmt', 'lint', 'test']
-# Is working tree clean after fmt?
+# Is working tree clean after generate/fmt?
 run = '! git status --porcelain | tee /dev/stderr | grep -q .'
 run_windows = 'powershell -c "$status = git status --porcelain; if ($status) { $status; exit 1 }"'
 
 [tasks.'generate:go']
 description = 'Generate Go code'
 run = 'go generate ./...'
+
+[tasks.'fmt:markdown']
+description = 'Format markdown files'
+sources = ['**/*.md']
+run = 'prettier --write "**/*.md"'
 
 [tasks.'fmt:go']
 description = 'Format Go code'
@@ -74,6 +83,12 @@ run = 'golangci-lint fmt'
 [tasks.'lint:workflows']
 description = 'Lint GitHub Action workflows'
 run = 'actionlint'
+
+[tasks.'lint:markdown']
+description = 'Lint markdown files'
+wait_for = ['fmt:markdown']
+sources = ['**/*.md']
+run = 'prettier --check "**/*.md"'
 
 [tasks.'lint:go']
 description = 'Lint Go files'

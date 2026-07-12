@@ -95,13 +95,12 @@ func (g *GroupOrAttrs) All() iter.Seq2[string, slog.Attr] {
 		// We will yield them in reverse order again to restore the original order.
 		reverse := g.reverse()
 		for _, v := range slices.Backward(reverse) {
-			cur := v
-			if cur.group != "" {
-				if !yield(cur.group, slog.Attr{}) {
+			if v.group != "" {
+				if !yield(v.group, slog.Attr{}) {
 					return
 				}
 			} else {
-				for _, a := range cur.attrs {
+				for _, a := range v.attrs {
 					if !yield("", a) {
 						return
 					}

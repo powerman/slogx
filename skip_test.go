@@ -18,7 +18,7 @@ func TestLogSkip(tt *testing.T) {
 	t := check.Must(tt)
 
 	var buf bytes.Buffer
-	ctx := context.Background()
+	ctx := t.Context()
 	h := slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true, Level: slog.LevelError})
 
 	slogx.LogSkip(ctx, 0, h, slog.LevelWarn, "message", "err", io.EOF)
@@ -41,7 +41,7 @@ func TestLogAttrsSkip(tt *testing.T) {
 	t := check.Must(tt)
 
 	var buf bytes.Buffer
-	ctx := context.Background()
+	ctx := t.Context()
 	h := slog.NewTextHandler(&buf, &slog.HandlerOptions{AddSource: true, Level: slog.LevelWarn})
 
 	slogx.LogAttrsSkip(ctx, 0, h, slog.LevelInfo, "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)})
@@ -67,7 +67,7 @@ func TestLogSkipCtx(tt *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	h := NewMockHandler(ctrl)
-	ctx := context.Background()
+	ctx := context.Background() //nolint:usetesting // LogSkip nil ctx → context.Background().
 	h.EXPECT().Enabled(ctx, slog.LevelError).Return(true)
 	h.EXPECT().Handle(ctx, gomock.Any()).Return(nil)
 	slogx.LogSkip(nil, 0, h, slog.LevelError, "message", "err", io.EOF) //nolint:staticcheck // By design.
@@ -79,7 +79,7 @@ func TestLogAttrsSkipCtx(tt *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	h := NewMockHandler(ctrl)
-	ctx := context.Background()
+	ctx := context.Background() //nolint:usetesting // LogAttrsSkip nil ctx → context.Background().
 	h.EXPECT().Enabled(ctx, slog.LevelWarn).Return(true)
 	h.EXPECT().Handle(ctx, gomock.Any()).Return(nil)
 	slogx.LogAttrsSkip(nil, 1, h, slog.LevelWarn, "message", slog.Attr{Key: "ID", Value: slog.IntValue(18)}) //nolint:staticcheck // By design.

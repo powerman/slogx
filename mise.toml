@@ -142,7 +142,7 @@ run = 'gotestsum -- -race -timeout=60s ./...'
 
 [tasks.'test:go:no-race']
 description = 'Run Go tests skipped with -race'
-wait_for = ['generate:*', 'lint:*']             # Avoid interleaved output with linters.
+wait_for = ['generate:*', 'lint:*'] # Avoid interleaved output with linters.
 run = 'gotestsum -- -timeout=60s ./...'
 
 [tasks.'cover:go:total']

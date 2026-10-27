@@ -234,7 +234,6 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 }
 
 func (h *LayoutHandler) clone() *LayoutHandler {
-	// We can't use assignment because we can't copy the mutex.
 	return &LayoutHandler{
 		opts:                   h.opts,
 		layoutAttrs:            h.layoutAttrs.clone(),

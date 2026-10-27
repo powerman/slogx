@@ -2,8 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE-go file.
 
-// TODO: verify that the output of Marshal{Text,JSON} is suitably escaped.
-
 package internal
 
 import (
@@ -673,9 +671,8 @@ func TestWriteTimeRFC3339(t *testing.T) {
 
 func BenchmarkWriteTime(b *testing.B) {
 	tm := time.Date(2022, time.March, 4, 5, 6, 7, 823456789, time.Local)
-	b.ResetTimer()
 	var buf []byte
-	for range b.N {
+	for b.Loop() {
 		buf = appendRFC3339Millis(buf[:0], tm)
 	}
 }

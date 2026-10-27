@@ -98,7 +98,16 @@ func appendTextValue(s *handleState, key string, v Value, format AttrFormat) err
 	case KindTime:
 		s.appendTime(key, v.Time())
 	case KindAny:
-		if tm, ok := v.Any().(encoding.TextMarshaler); ok {
+		if ta, ok := v.Any().(encoding.TextAppender); ok {
+			var buf []byte
+			buf, err := ta.AppendText(buf)
+			if err != nil {
+				return err
+			}
+			// TODO: append directly to buffer when possible
+			s.appendString(string(buf), format)
+			return nil
+		} else if tm, ok := v.Any().(encoding.TextMarshaler); ok {
 			data, err := tm.MarshalText()
 			if err != nil {
 				return err

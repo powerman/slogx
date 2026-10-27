@@ -504,6 +504,10 @@ formatters:
     generated: strict
     paths:
       - \.[\w-]+\.go$ # Use this pattern to name auto-generated files.
+      # Copy of code from the Go standard library sources, except our own
+      # internal/layout_handler.go and internal/layout_test.go.
+      - ^internal/(benchmarks|buffer|race)/
+      - ^internal/(attr|handler_test|internal|json_handler|logger_test|record|text_handler|text_handler_test|value|value_test)\.go$
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

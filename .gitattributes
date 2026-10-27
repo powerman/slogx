@@ -6,3 +6,16 @@
 # na/**/me  - apply (* doesn't match /) to file "na/me", "na/*/me", "na/*/*/me", …
 go.sum binary
 *.*.go binary
+/internal/benchmarks/** vendored
+/internal/buffer/** vendored
+/internal/race/** vendored
+/internal/attr.go vendored
+/internal/handler_test.go vendored
+/internal/internal.go vendored
+/internal/json_handler.go vendored
+/internal/logger_test.go vendored
+/internal/record.go vendored
+/internal/text_handler.go vendored
+/internal/text_handler_test.go vendored
+/internal/value.go vendored
+/internal/value_test.go vendored

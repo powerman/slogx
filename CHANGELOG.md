@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-28
+
+### 🚀 Added
+
+- Support encoding.TextAppender in LayoutHandler by @powerman in [ebb3a64]
+
+### 🔔 Changed
+
+- Require Go 1.26 by @powerman in [a7814c8]
+
+### 📦️ Dependencies
+
+- **(deps)** Upgrade go and golangci-lint by @powerman in [b6fe2fa]
+- **(deps)** Upgrade go modules by @powerman in [a04d2ff]
+- **(deps)** Upgrade go and golangci-lint by @powerman in [935e404]
+- **(deps)** Mise up by @powerman in [17af70f]
+
+[0.4.0]: https://github.com/powerman/slogx/compare/v0.3.0..v0.4.0
+[b6fe2fa]: https://github.com/powerman/slogx/commit/b6fe2fab353d92c35920fe0f8aa8eba6809d5354
+[a04d2ff]: https://github.com/powerman/slogx/commit/a04d2ffa4dce5adc228f17df85cc0d8f27ae672c
+[935e404]: https://github.com/powerman/slogx/commit/935e4044652b8b03c3d37d0542374cfc98469b63
+[a7814c8]: https://github.com/powerman/slogx/commit/a7814c8dae2e2deb9fe884fb45d31cdc31e064f4
+[ebb3a64]: https://github.com/powerman/slogx/commit/ebb3a64e999fd34dd6e9d4709231804fd3c30854
+[17af70f]: https://github.com/powerman/slogx/commit/17af70f2074aac8739129fbe816ed4776a532d47
+
 ## [0.3.0] - 2026-07-12
 
 ### 📚 Documentation

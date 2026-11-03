@@ -41,6 +41,10 @@ git-cliff = 'latest'
 gh = 'latest'
 
 
+[env]
+PNPM_CONFIG_VIRTUAL_STORE_TYPE = 'project' # Fix https://github.com/jdx/mise/discussions/15328.
+
+
 [vars]
 cover = '.cache/cover.out'
 cover_tmpdir = '{{ env.TMPDIR | default(value="") }}' # Overwrite in mise.local.toml if needed.

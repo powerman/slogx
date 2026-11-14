@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/powerman/slogx/internal"
@@ -120,8 +121,9 @@ func InlineSubErrorAttrs() ErrorAttrsOption {
 // ErrorAttrs returns an [slog.HandlerOptions].ReplaceAttr function
 // that will replace attr's Value of error type
 // with [slog.GroupValue] containing all attrs attached (by [NewError] or [NewErrorAttrs])
-// to any of recursively unwrapped errors
-// plus attr with error (stripped of attached attrs) itself at the end.
+// to any of recursively unwrapped errors,
+// then attr with error (stripped of attached attrs) itself,
+// then groups of the other errors of [errors.Join] (see [ErrorAttrsOf]).
 //
 // By default returned attr's Key depends on groups:
 // if groups are empty then Key will be empty, otherwise Key will be attr's Key.
@@ -155,6 +157,24 @@ func ErrorAttrs(opts ...ErrorAttrsOption) func(groups []string, attr slog.Attr) 
 	}
 }
 
+// ErrorAttrsOf returns the attrs which [ErrorAttrs] would put into the group of err
+// (attrs attached by [NewError] or [NewErrorAttrs] to err and to every error it wraps,
+// then groups of the other errors of [errors.Join]), except the attr of err itself.
+//
+// The key is the attr key which [ErrorAttrs] would see:
+// it names the groups "key-N" of the joined errors and the error attr inside each of them.
+// Joined errors are reported even if none of them has attached attrs.
+//
+// It is intended for logging an error whose text is printed by the caller
+// (e.g. as the log message), without logging the error a second time.
+//
+// If err is nil or has no attached attrs and no joined errors then returns an empty slice.
+// The returned slice is owned by the caller.
+func ErrorAttrsOf(key string, err error) []slog.Attr {
+	first, rest := getErrorAttrs(nil, key, err)
+	return slices.Concat(first, rest)
+}
+
 // getErrorAttrs returns all slog attrs attached to err and its wrapped errors,
 // in order from outer to inner.
 func getErrorAttrs(errorNum *int, key string, err error) (first []slog.Attr, rest []slog.Attr) {
@@ -170,7 +190,9 @@ func getErrorAttrs(errorNum *int, key string, err error) (first []slog.Attr, res
 		return nil, nil
 	case errorAttrs:
 		first, rest = getErrorAttrs(errorNum, key, errors.Unwrap(err))
-		return append(*err2.attrs, first...), rest
+		// Not append: it could write into spare capacity of the slice given to NewErrorAttrs,
+		// which is shared by all users of err.
+		return slices.Concat(*err2.attrs, first), rest
 	case interface{ Unwrap() []error }:
 		errs := err2.Unwrap()
 		if len(errs) == 0 {

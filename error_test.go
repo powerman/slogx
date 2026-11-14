@@ -124,7 +124,7 @@ func errSplitCases() []splitCase {
 		},
 		{
 			"nested_join", errors.Join(io.EOF, errors.Join(io.ErrUnexpectedEOF, io.ErrShortWrite)),
-			`err=EOF err-3.err="unexpected EOF" err-3.err-2.err="short write"`,
+			`err=EOF err-2.err="unexpected EOF" err-2.err-3.err="short write"`,
 		},
 		{
 			"multi_wrap_attrs_in_first", fmt.Errorf("%w and %w", slogx.NewError(io.EOF, "k", 1), io.ErrUnexpectedEOF),
@@ -236,12 +236,12 @@ func TestErrorAttrs_Join(t *testing.T) {
 			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"`},
 		{err1234, `k1=1 k2=2 err="wrap1: EOF"` +
 			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
-			` err-4.k5=5 err-4.err="short write"` +
-			` err-4.err-3.err="short buffer"`},
+			` err-3.k5=5 err-3.err="short write"` +
+			` err-3.err-4.err="short buffer"`},
 		{err1234wrap, `k6=6 k1=1 k2=2 err="wrap1234: wrap1: EOF"` +
 			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
-			` err-4.k5=5 err-4.err="short write"` +
-			` err-4.err-3.err="short buffer"`},
+			` err-3.k5=5 err-3.err="short write"` +
+			` err-3.err-4.err="short buffer"`},
 		{err12wrap34, `k1=1 k2=2 err="wrap12: wrap1: EOF"` +
 			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
 			` err-3.k5=5 err-3.err="short write"` +
@@ -355,15 +355,15 @@ func errJoinCases() []errCase {
 		{
 			err1234, `k1=1 k2=2` +
 				` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
-				` err-4.k5=5 err-4.err="short write"` +
-				` err-4.err-3.err="short buffer"`,
+				` err-3.k5=5 err-3.err="short write"` +
+				` err-3.err-4.err="short buffer"`,
 			"wrap1: EOF",
 		},
 		{
 			err1234wrap, `k6=6 k1=1 k2=2` +
 				` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
-				` err-4.k5=5 err-4.err="short write"` +
-				` err-4.err-3.err="short buffer"`,
+				` err-3.k5=5 err-3.err="short write"` +
+				` err-3.err-4.err="short buffer"`,
 			"wrap1234: wrap1: EOF",
 		},
 		{

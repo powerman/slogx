@@ -242,11 +242,12 @@ func getErrorAttrs(errorNum *int, key string, err error) (first []slog.Attr, res
 		}
 		first, rest = getErrorAttrs(errorNum, key, errs[0])
 		for i := 1; i < len(errs); i++ {
-			subFirst, subRest := getErrorAttrs(errorNum, key, errs[i])
 			*errorNum++
+			num := *errorNum // Numbered before its own nested errors, to follow the output order.
+			subFirst, subRest := getErrorAttrs(errorNum, key, errs[i])
 			subFirst = append(subFirst, slog.Any(key, newErrorNoAttrs(errs[i])))
 			rest = append(rest, slog.Attr{
-				Key:   fmt.Sprintf("%s-%d", key, *errorNum),
+				Key:   fmt.Sprintf("%s-%d", key, num),
 				Value: slog.GroupValue(append(subFirst, subRest...)...),
 			})
 		}

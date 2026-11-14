@@ -130,7 +130,19 @@ func InlineSubErrorAttrs() ErrorAttrsOption {
 // In other words, error attrs are inlined at top level and grouped at sub levels.
 // This behaviour may be changed by given options.
 //
-// If attr's Value is not of error type or error has no attached attrs then returns original attr.
+// An error which wraps several errors (e.g. returned by [errors.Join])
+// is split: its first wrapped error is described as above,
+// and each other one gets its own group "key-N" with its attrs and its error attr,
+// so these errors are logged as separate attrs instead of one multi-line value.
+// Their text is removed from the end of the text of the error attr if it is there
+// (as with [errors.Join]), otherwise it is logged twice (e.g. with [fmt.Errorf]("%w and %w")).
+// An error is not split if its text has no newlines and none of its wrapped errors
+// has attached attrs.
+// So if [NewError] and [NewErrorAttrs] are not used at all
+// then ErrorAttrs just splits errors returned by [errors.Join].
+//
+// If attr's Value is not of error type, or the error has neither attached attrs
+// nor wrapped errors to split, then returns original attr.
 func ErrorAttrs(opts ...ErrorAttrsOption) func(groups []string, attr slog.Attr) slog.Attr {
 	var cfg errorAttrsConfig
 	for _, opt := range opts {
@@ -157,22 +169,48 @@ func ErrorAttrs(opts ...ErrorAttrsOption) func(groups []string, attr slog.Attr) 
 	}
 }
 
-// ErrorAttrsOf returns the attrs which [ErrorAttrs] would put into the group of err
-// (attrs attached by [NewError] or [NewErrorAttrs] to err and to every error it wraps,
-// then groups of the other errors of [errors.Join]), except the attr of err itself.
+// ErrorAttrsOf returns what [ErrorAttrs] would log for err, split into two results.
+//
+// The errMsg is the text of the error attr which [ErrorAttrs] would log
+// (err.Error() if [ErrorAttrs] would keep the original attr).
+// The attrs are the other attrs of that group, in the same order:
+// attrs attached by [NewError] or [NewErrorAttrs] to err and to every error it wraps,
+// then groups "key-N" of the other errors of a split error (see [ErrorAttrs]).
 //
 // The key is the attr key which [ErrorAttrs] would see:
-// it names the groups "key-N" of the joined errors and the error attr inside each of them.
-// Joined errors are reported even if none of them has attached attrs.
+// it names the groups "key-N" and the error attr inside each of them.
 //
 // It is intended for logging an error whose text is printed by the caller
 // (e.g. as the log message), without logging the error a second time.
+// Use errMsg as the text, not err.Error():
+// err.Error() also contains the texts of split errors, which attrs already have.
 //
-// If err is nil or has no attached attrs and no joined errors then returns an empty slice.
+// If err is nil then returns "", nil.
 // The returned slice is owned by the caller.
-func ErrorAttrsOf(key string, err error) []slog.Attr {
+func ErrorAttrsOf(key string, err error) (errMsg string, attrs []slog.Attr) {
+	if err == nil {
+		return "", nil
+	}
 	first, rest := getErrorAttrs(nil, key, err)
-	return slices.Concat(first, rest)
+	if len(first)+len(rest) == 0 {
+		return err.Error(), nil // Same condition under which ErrorAttrs keeps the original attr.
+	}
+	return newErrorNoAttrs(err).Error(), slices.Concat(first, rest)
+}
+
+// hasErrorAttrs reports whether err or any of its wrapped or joined errors has attached attrs.
+// It stops at errorNoAttrs, the same way as getErrorAttrs.
+func hasErrorAttrs(err error) bool {
+	switch err2 := err.(type) { //nolint:errorlint // We want to check for specific types.
+	case nil, errorNoAttrs:
+		return false
+	case errorAttrs:
+		return len(*err2.attrs) > 0 || hasErrorAttrs(err2.err)
+	case interface{ Unwrap() []error }:
+		return slices.ContainsFunc(err2.Unwrap(), hasErrorAttrs)
+	default:
+		return hasErrorAttrs(errors.Unwrap(err))
+	}
 }
 
 // getErrorAttrs returns all slog attrs attached to err and its wrapped errors,
@@ -196,6 +234,10 @@ func getErrorAttrs(errorNum *int, key string, err error) (first []slog.Attr, res
 	case interface{ Unwrap() []error }:
 		errs := err2.Unwrap()
 		if len(errs) == 0 {
+			return nil, nil
+		}
+		// Splitting gains nothing: no multi-line text and no attrs to tie to a member.
+		if !strings.Contains(err.Error(), "\n") && !slices.ContainsFunc(errs, hasErrorAttrs) {
 			return nil, nil
 		}
 		first, rest = getErrorAttrs(errorNum, key, errs[0])

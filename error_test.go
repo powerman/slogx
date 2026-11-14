@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"testing"
 
@@ -77,6 +78,9 @@ func TestErrorAttrs_ReturnOriginal(t *testing.T) {
 		{slog.Any("no_attrs", io.EOF)},
 		{slog.Any("empty_args", slogx.NewError(io.EOF))},
 		{slog.Any("empty_attrs", slogx.NewErrorAttrs(io.EOF))},
+		{slog.Any("multi_wrap_no_attrs", errMultiWrapNoAttrs())},
+		{slog.Any("multi_wrap_empty_attrs", errMultiWrapEmptyAttrs())},
+		{slog.Any("wrapped_multi_wrap_no_attrs", fmt.Errorf("wrap: %w", errMultiWrapNoAttrs()))},
 	}
 	for _, tc := range tests {
 		t.Run(tc.attr.Key, func(tt *testing.T) {
@@ -84,6 +88,81 @@ func TestErrorAttrs_ReturnOriginal(t *testing.T) {
 			t := check.Must(tt)
 			attr := slogx.ErrorAttrs()(nil, tc.attr)
 			t.True(tc.attr.Equal(attr))
+		})
+	}
+}
+
+// A multi-error without text to make readable and without attached attrs
+// is logged as is, the same as without ErrorAttrs.
+func errMultiWrapNoAttrs() error {
+	return fmt.Errorf("%w and %w", io.EOF, io.ErrUnexpectedEOF)
+}
+
+func errMultiWrapEmptyAttrs() error {
+	return fmt.Errorf("%w and %w", slogx.NewError(io.EOF), slogx.NewErrorAttrs(io.ErrUnexpectedEOF))
+}
+
+type splitCase struct {
+	name string
+	err  error
+	want string // Output of ErrorAttrs.
+}
+
+func errSplitCases() []splitCase {
+	return []splitCase{
+		{
+			"join", errors.Join(io.EOF, io.ErrUnexpectedEOF),
+			`err=EOF err-2.err="unexpected EOF"`,
+		},
+		{
+			"join_empty_attrs", errors.Join(slogx.NewError(io.EOF), slogx.NewErrorAttrs(io.ErrUnexpectedEOF)),
+			`err=EOF err-2.err="unexpected EOF"`,
+		},
+		{
+			"wrapped_join", fmt.Errorf("wrap: %w", errors.Join(io.EOF, io.ErrUnexpectedEOF)),
+			`err="wrap: EOF" err-2.err="unexpected EOF"`,
+		},
+		{
+			"nested_join", errors.Join(io.EOF, errors.Join(io.ErrUnexpectedEOF, io.ErrShortWrite)),
+			`err=EOF err-3.err="unexpected EOF" err-3.err-2.err="short write"`,
+		},
+		{
+			"multi_wrap_attrs_in_first", fmt.Errorf("%w and %w", slogx.NewError(io.EOF, "k", 1), io.ErrUnexpectedEOF),
+			`k=1 err="EOF and unexpected EOF" err-2.err="unexpected EOF"`,
+		},
+		{
+			"multi_wrap_attrs_in_last", fmt.Errorf("%w and %w", io.EOF, slogx.NewError(io.ErrUnexpectedEOF, "k", 1)),
+			`err="EOF and unexpected EOF" err-2.k=1 err-2.err="unexpected EOF"`,
+		},
+		{
+			"multi_wrap_join", fmt.Errorf("%w and %w", errors.Join(io.EOF, io.ErrUnexpectedEOF), io.ErrShortWrite),
+			`err="EOF\nunexpected EOF and short write" err-2.err="unexpected EOF" err-3.err="short write"`,
+		},
+		{
+			"join_with_context", fmt.Errorf("%w: context", errors.Join(io.EOF, io.ErrUnexpectedEOF)),
+			`err="EOF\nunexpected EOF: context" err-2.err="unexpected EOF"`,
+		},
+	}
+}
+
+// A multi-error is split even without attached attrs,
+// so attaching an attr to one of its members doesn't change the format of the whole error.
+func TestErrorAttrs_Split(t *testing.T) {
+	t.Parallel()
+
+	tests := append(errSplitCases(),
+		splitCase{
+			"join_attr_in_last", errors.Join(io.EOF, slogx.NewError(io.ErrUnexpectedEOF, "k", 1)),
+			`err=EOF err-2.k=1 err-2.err="unexpected EOF"`,
+		},
+	)
+	for _, tc := range tests {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+			t := check.Must(tt)
+			log, buf := newLog(slogx.ErrorAttrs())
+			log.Info("Msg", "err", tc.err)
+			t.Equal(buf.String(), "level=INFO msg=Msg "+tc.want+"\n")
 		})
 	}
 }
@@ -226,8 +305,9 @@ func TestErrorAttrs_Group(t *testing.T) {
 }
 
 type errCase struct {
-	err  error
-	want string // Output of ErrorAttrsOf.
+	err     error
+	want    string // Output of ErrorAttrsOf attrs.
+	wantMsg string // Text of ErrorAttrsOf errMsg.
 }
 
 func errWrappedCases() []errCase {
@@ -238,10 +318,10 @@ func errWrappedCases() []errCase {
 		err4 = fmt.Errorf("wrap4: %w", err3)
 	)
 	return []errCase{
-		{err1, `k1=1 k2=2`},
-		{err2, `k1=1 k2=2`},
-		{err3, `k3=3 k4=4 k1=1 k2=2`},
-		{err4, `k3=3 k4=4 k1=1 k2=2`},
+		{err1, `k1=1 k2=2`, "EOF"},
+		{err2, `k1=1 k2=2`, "wrap2: EOF"},
+		{err3, `k3=3 k4=4 k1=1 k2=2`, "wrap2: EOF"},
+		{err4, `k3=3 k4=4 k1=1 k2=2`, "wrap4: wrap2: EOF"},
 	}
 }
 
@@ -262,30 +342,51 @@ func errJoinCases() []errCase {
 		err1234stack = errors.Join(errors.Join(errors.Join(err1, err2), err3), err4)
 	)
 	return []errCase{
-		{err12, `k1=1 k2=2` +
-			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"`},
-		{err12wrap, `k1=1 k2=2` +
-			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"`},
-		{err1234, `k1=1 k2=2` +
-			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
-			` err-4.k5=5 err-4.err="short write"` +
-			` err-4.err-3.err="short buffer"`},
-		{err1234wrap, `k6=6 k1=1 k2=2` +
-			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
-			` err-4.k5=5 err-4.err="short write"` +
-			` err-4.err-3.err="short buffer"`},
-		{err12wrap34, `k1=1 k2=2` +
-			` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
-			` err-3.k5=5 err-3.err="short write"` +
-			` err-4.err="short buffer"`},
-		{err1234list, `k1=1 k2=2` +
-			` err-2.k3=3 err-2.k4=4 err-2.err="unexpected EOF"` +
-			` err-3.k5=5 err-3.err="short write"` +
-			` err-4.err="short buffer"`},
-		{err1234stack, `k1=1 k2=2` +
-			` err-2.k3=3 err-2.k4=4 err-2.err="unexpected EOF"` +
-			` err-3.k5=5 err-3.err="short write"` +
-			` err-4.err="short buffer"`},
+		{
+			err12, `k1=1 k2=2` +
+				` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"`,
+			"wrap1: EOF",
+		},
+		{
+			err12wrap, `k1=1 k2=2` +
+				` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"`,
+			"wrap12: wrap1: EOF",
+		},
+		{
+			err1234, `k1=1 k2=2` +
+				` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
+				` err-4.k5=5 err-4.err="short write"` +
+				` err-4.err-3.err="short buffer"`,
+			"wrap1: EOF",
+		},
+		{
+			err1234wrap, `k6=6 k1=1 k2=2` +
+				` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
+				` err-4.k5=5 err-4.err="short write"` +
+				` err-4.err-3.err="short buffer"`,
+			"wrap1234: wrap1: EOF",
+		},
+		{
+			err12wrap34, `k1=1 k2=2` +
+				` err-2.k3=3 err-2.k4=4 err-2.err="wrap2: unexpected EOF"` +
+				` err-3.k5=5 err-3.err="short write"` +
+				` err-4.err="short buffer"`,
+			"wrap12: wrap1: EOF",
+		},
+		{
+			err1234list, `k1=1 k2=2` +
+				` err-2.k3=3 err-2.k4=4 err-2.err="unexpected EOF"` +
+				` err-3.k5=5 err-3.err="short write"` +
+				` err-4.err="short buffer"`,
+			"EOF",
+		},
+		{
+			err1234stack, `k1=1 k2=2` +
+				` err-2.k3=3 err-2.k4=4 err-2.err="unexpected EOF"` +
+				` err-3.k5=5 err-3.err="short write"` +
+				` err-4.err="short buffer"`,
+			"EOF",
+		},
 	}
 }
 
@@ -303,8 +404,9 @@ func TestErrorAttrsOf_Wrapped(t *testing.T) {
 		t.Run("", func(tt *testing.T) {
 			tt.Parallel()
 			t := check.Must(tt)
-			t.Equal(logErrorAttrsOf(slogx.ErrorAttrsOf("err", tc.err)),
-				"level=INFO msg=Msg "+tc.want+"\n")
+			errMsg, attrs := slogx.ErrorAttrsOf("err", tc.err)
+			t.Equal(errMsg, tc.wantMsg)
+			t.Equal(logErrorAttrsOf(attrs), "level=INFO msg=Msg "+tc.want+"\n")
 		})
 	}
 }
@@ -315,8 +417,9 @@ func TestErrorAttrsOf_Join(t *testing.T) {
 		t.Run("", func(tt *testing.T) {
 			tt.Parallel()
 			t := check.Must(tt)
-			t.Equal(logErrorAttrsOf(slogx.ErrorAttrsOf("err", tc.err)),
-				"level=INFO msg=Msg "+tc.want+"\n")
+			errMsg, attrs := slogx.ErrorAttrsOf("err", tc.err)
+			t.Equal(errMsg, tc.wantMsg)
+			t.Equal(logErrorAttrsOf(attrs), "level=INFO msg=Msg "+tc.want+"\n")
 		})
 	}
 }
@@ -333,33 +436,60 @@ func TestErrorAttrsOf_Empty(t *testing.T) {
 		{"wrapped_no_attrs", fmt.Errorf("wrap: %w", io.EOF)},
 		{"empty_args", slogx.NewError(io.EOF)},
 		{"empty_attrs", slogx.NewErrorAttrs(io.EOF)},
+		{"multi_wrap_no_attrs", errMultiWrapNoAttrs()},
+		{"multi_wrap_empty_attrs", errMultiWrapEmptyAttrs()},
+		{"wrapped_multi_wrap_no_attrs", fmt.Errorf("wrap: %w", errMultiWrapNoAttrs())},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(tt *testing.T) {
 			tt.Parallel()
 			t := check.Must(tt)
-			t.Len(slogx.ErrorAttrsOf("err", tc.err), 0)
-			// Same condition under which ErrorAttrs returns the original attr.
-			if tc.err != nil {
-				attr := slog.Any("err", tc.err)
-				t.True(slogx.ErrorAttrs()(nil, attr).Equal(attr))
+			errMsg, attrs := slogx.ErrorAttrsOf("err", tc.err)
+			t.Len(attrs, 0)
+			if tc.err == nil {
+				t.Equal(errMsg, "")
+				return
 			}
+			t.Equal(errMsg, tc.err.Error())
+			// Same condition under which ErrorAttrs returns the original attr.
+			attr := slog.Any("err", tc.err)
+			t.True(slogx.ErrorAttrs()(nil, attr).Equal(attr))
 		})
 	}
 }
 
-func TestErrorAttrsOf_JoinPlain(tt *testing.T) {
+func TestErrorAttrsOf_Split(tt *testing.T) {
 	tt.Parallel()
 	t := check.Must(tt)
 
-	err := errors.Join(io.EOF, io.ErrUnexpectedEOF)
-	t.Equal(logErrorAttrsOf(slogx.ErrorAttrsOf("err", err)),
-		"level=INFO msg=Msg err-2.err=\"unexpected EOF\"\n")
+	// A plain join is split even without attached attrs.
+	errMsg, attrs := slogx.ErrorAttrsOf("err", errors.Join(io.EOF, io.ErrUnexpectedEOF))
+	t.Equal(errMsg, "EOF")
+	t.Equal(logErrorAttrsOf(attrs), "level=INFO msg=Msg err-2.err=\"unexpected EOF\"\n")
+
+	// A multi-error which gains nothing from splitting is returned as is.
+	err := errMultiWrapNoAttrs()
+	errMsg, attrs = slogx.ErrorAttrsOf("err", err)
+	t.Equal(errMsg, "EOF and unexpected EOF")
+	t.Len(attrs, 0)
+}
+
+// Attrs attached only to a joined error which is not the first one are found too.
+func TestErrorAttrsOf_JoinAttrsNotInFirst(tt *testing.T) {
+	tt.Parallel()
+	t := check.Must(tt)
+
+	err := errors.Join(io.EOF, io.ErrShortWrite, slogx.NewError(io.ErrUnexpectedEOF, "k", 1))
+	errMsg, attrs := slogx.ErrorAttrsOf("err", err)
+	t.Equal(errMsg, "EOF")
+	t.Equal(logErrorAttrsOf(attrs),
+		"level=INFO msg=Msg err-2.err=\"short write\" err-3.k=1 err-3.err=\"unexpected EOF\"\n")
 
 	// ErrorAttrs is consistent with it.
 	log, buf := newLog(slogx.ErrorAttrs())
 	log.Info("Msg", "err", err)
-	t.Equal(buf.String(), "level=INFO msg=Msg err=EOF err-2.err=\"unexpected EOF\"\n")
+	t.Equal(buf.String(),
+		"level=INFO msg=Msg err=EOF err-2.err=\"short write\" err-3.k=1 err-3.err=\"unexpected EOF\"\n")
 }
 
 func TestErrorAttrsOf_Key(tt *testing.T) {
@@ -367,8 +497,8 @@ func TestErrorAttrsOf_Key(tt *testing.T) {
 	t := check.Must(tt)
 
 	err := errors.Join(slogx.NewError(io.EOF, "k1", 1), io.ErrUnexpectedEOF)
-	t.Equal(logErrorAttrsOf(slogx.ErrorAttrsOf("e", err)),
-		"level=INFO msg=Msg k1=1 e-2.e=\"unexpected EOF\"\n")
+	_, attrs := slogx.ErrorAttrsOf("e", err)
+	t.Equal(logErrorAttrsOf(attrs), "level=INFO msg=Msg k1=1 e-2.e=\"unexpected EOF\"\n")
 }
 
 func TestErrorAttrsOf_SameKeyAndText(tt *testing.T) {
@@ -377,7 +507,8 @@ func TestErrorAttrsOf_SameKeyAndText(tt *testing.T) {
 
 	// The attached attr must be kept even if it looks like the error itself.
 	err := slogx.NewError(io.EOF, "err", io.EOF)
-	t.Equal(logErrorAttrsOf(slogx.ErrorAttrsOf("err", err)), "level=INFO msg=Msg err=EOF\n")
+	_, attrs := slogx.ErrorAttrsOf("err", err)
+	t.Equal(logErrorAttrsOf(attrs), "level=INFO msg=Msg err=EOF\n")
 }
 
 func TestErrorAttrsOf_NoAliasing(tt *testing.T) {
@@ -390,12 +521,13 @@ func TestErrorAttrsOf_NoAliasing(tt *testing.T) {
 	err := slogx.NewErrorAttrs(io.EOF, s...)
 	want := "level=INFO msg=Msg a=1\n"
 
-	res := slogx.ErrorAttrsOf("err", err)
+	_, res := slogx.ErrorAttrsOf("err", err)
 	t.Equal(logErrorAttrsOf(res), want)
 
 	res[0] = slog.Attr{}
 	_ = append(res, slog.Int("c", 3))
-	t.Equal(logErrorAttrsOf(slogx.ErrorAttrsOf("err", err)), want)
+	_, res = slogx.ErrorAttrsOf("err", err)
+	t.Equal(logErrorAttrsOf(res), want)
 	t.DeepEqual(s[:cap(s)][1:], make([]slog.Attr, 7))
 }
 
@@ -430,28 +562,47 @@ func TestErrorAttrsOf_ConsistentWithErrorAttrs(t *testing.T) {
 	// The attr of the error itself goes right after the attached attrs.
 	topErrRe := regexp.MustCompile(` err=(?:"[^"]*"|\S+)`)
 
-	for _, tc := range append(errWrappedCases(), errJoinCases()...) {
+	run := func(err error) {
 		t.Run("", func(tt *testing.T) {
 			tt.Parallel()
 			t := check.Must(tt)
 
 			log, buf := newLog(slogx.ErrorAttrs())
-			log.Info("Msg", "err", tc.err)
+			log.Info("Msg", "err", err)
 			full := buf.String()
-			t.Equal(len(topErrRe.FindAllString(full, -1)), 1)
+			topErr := topErrRe.FindAllString(full, -1)
+			t.Len(topErr, 1)
 
-			t.Equal(logErrorAttrsOf(slogx.ErrorAttrsOf("err", tc.err)),
-				topErrRe.ReplaceAllString(full, ""))
+			errMsg, attrs := slogx.ErrorAttrsOf("err", err)
+			t.Equal(logErrorAttrsOf(attrs), topErrRe.ReplaceAllString(full, ""))
+
+			// The errMsg is exactly the text which ErrorAttrs logs.
+			log, buf = newLog()
+			log.Info("Msg", "err", errMsg)
+			t.Equal(topErr[0], strings.TrimSuffix(strings.TrimPrefix(buf.String(), "level=INFO msg=Msg"), "\n"))
 		})
+	}
+	for _, tc := range errWrappedCases() {
+		run(tc.err)
+	}
+	for _, tc := range errJoinCases() {
+		run(tc.err)
+	}
+	for _, tc := range errSplitCases() {
+		run(tc.err)
 	}
 }
 
 func ExampleErrorAttrsOf() {
-	err := fmt.Errorf("load config: %w", slogx.NewError(io.ErrUnexpectedEOF, "file", "app.toml"))
+	err := errors.Join(
+		fmt.Errorf("load config: %w", slogx.NewError(io.ErrUnexpectedEOF, "file", "app.toml")),
+		io.ErrShortWrite,
+	)
 	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{ReplaceAttr: removeTime}))
 
+	errMsg, attrs := slogx.ErrorAttrsOf("err", err)
 	// The text of the error is the message, so the error itself must not be logged again.
-	log.LogAttrs(context.Background(), slog.LevelError, err.Error(), slogx.ErrorAttrsOf("err", err)...)
+	log.LogAttrs(context.Background(), slog.LevelError, errMsg, attrs...)
 	// Output:
-	// level=ERROR msg="load config: unexpected EOF" file=app.toml
+	// level=ERROR msg="load config: unexpected EOF" file=app.toml err-2.err="short write"
 }

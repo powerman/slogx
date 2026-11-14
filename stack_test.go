@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"regexp"
+	"slices"
 	"testing"
 
 	"github.com/powerman/check"
@@ -83,6 +84,6 @@ func logSkipHelper(msg string, args ...any) {
 	const skip = 1
 	ctx := context.Background()
 	h := slog.Default().Handler()
-	args = append(args, slogx.StackSkip(skip))
+	args = slices.Concat(args, []any{slogx.StackSkip(skip)})
 	slogx.LogSkip(ctx, skip, h, slog.LevelInfo, msg, args...)
 }

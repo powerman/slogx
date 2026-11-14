@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -21,7 +22,7 @@ import (
 func newLog(fs ...func([]string, slog.Attr) slog.Attr) (*slog.Logger, *bytes.Buffer) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{
-		ReplaceAttr: slogx.ChainReplaceAttr(append(fs, removeTime)...),
+		ReplaceAttr: slogx.ChainReplaceAttr(slices.Concat(fs, []func([]string, slog.Attr) slog.Attr{removeTime})...),
 	}))
 	return log, &buf
 }

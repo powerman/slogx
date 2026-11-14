@@ -71,6 +71,9 @@ func NewError(err error, args ...any) error {
 
 // NewErrorAttrs returns err with attached slog attrs.
 //
+// The attrs slice is retained as is, without copying, to avoid an extra allocation.
+// The caller must not modify it (including its elements) after this call.
+//
 // You should use [slog.HandlerOptions].ReplaceAttr function returned by [ErrorAttrs]
 // to make slog log these attrs.
 //

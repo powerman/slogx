@@ -84,7 +84,8 @@ var Stack = StackSkip(0) // Const.
 //		ctx := context.Background()
 //		h := slog.Default().Handler()
 //		// Skip LogHelper frame from stack.
-//		args = append(args, slogx.StackSkip(skip))
+//		// Not append: args may share a backing array with the caller's slice.
+//		args = slices.Concat(args, []any{slogx.StackSkip(skip)})
 //		// Skip LogHelper frame from source.
 //		slogx.LogSkip(ctx, skip, h, slog.LevelInfo, msg, args...)
 //	}

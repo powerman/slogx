@@ -14,6 +14,16 @@ import (
 	"github.com/powerman/slogx"
 )
 
+func TestWrapHandlerConfig_Resolve(tt *testing.T) {
+	tt.Parallel()
+	t := check.T(tt)
+
+	cfg := slogx.WrapHandlerConfig{ProxyWith: true}
+	got, err := cfg.Resolve()
+	t.Nil(err)
+	t.DeepEqual(got, cfg)
+}
+
 func TestWrapHandler(t *testing.T) {
 	t.Parallel()
 

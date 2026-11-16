@@ -56,6 +56,16 @@ type WrapHandlerConfig struct {
 	ProxyWithAttrs bool // Proxy WithAttrs calls before first WithGroup call.
 }
 
+// Resolve returns a ready-to-use deep copy of cfg:
+// with defaults applied, values normalized, and everything validated.
+// It is idempotent.
+//
+// All values of WrapHandlerConfig are valid and there are no defaults,
+// so it always returns cfg and a nil error.
+func (cfg WrapHandlerConfig) Resolve() (WrapHandlerConfig, error) {
+	return cfg, nil
+}
+
 // WrapHandler is an [slog.Handler] that wraps another [slog.Handler].
 // It is a useful building block for handlers that want to wrap another handler.
 //
@@ -71,6 +81,7 @@ type WrapHandler struct {
 // using the provided configuration.
 // You need to provide at least one callback in the configuration for it to be useful.
 func NewWrapHandler(next slog.Handler, cfg WrapHandlerConfig) *WrapHandler {
+	cfg, _ = cfg.Resolve() // The signature has no error to return.
 	return &WrapHandler{cfg: cfg, next: next}
 }
 

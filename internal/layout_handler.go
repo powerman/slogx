@@ -52,7 +52,7 @@ type AttrFormat struct {
 	SkipQuote      bool   // Do not quote the value, even if needed.
 }
 
-//nolint:gochecknoglobals // Shared read-only value, reused to avoid allocating it on every call.
+//nolint:gochecknoglobals // Used as a constant: Go has no struct constants.
 var noFormat = AttrFormat{MaxWidth: -1}
 
 // LayoutHandlerOptions contains options for [NewLayoutHandler].
@@ -183,7 +183,7 @@ type startSepState int
 const (
 	sepNone     startSepState = iota // no attrs yet
 	sepSkipped                       // first attr has no Format (output without required attrSep)
-	sepIncluded                      // first attr has Format (does not need attrSep)
+	sepIncluded                      // first attr has attrSep or Format (does not need attrSep)
 )
 
 // LayoutHandler is a handler created by [NewLayoutHandler].
@@ -300,8 +300,7 @@ func (h *LayoutHandler) WithGroup(name string) Handler {
 	return h2
 }
 
-// Handle is the internal implementation of Handler.Handle
-// used by TextHandler and LayoutHandler.
+// Handle implements [Handler].
 //
 //nolint:funlen // Inherent to assembling time/level/source/message/prefix/suffix in one pass.
 func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
@@ -343,9 +342,9 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 		}
 		state.appendAttr(Any(SourceKey, src))
 	}
-	// To inject prefix attrs before the message, we need to know where the message
-	// starts and is next attr appended at this point has skipped attrSep
-	// (may happens if there were no attrs yet and next attr has no Format).
+	// To inject prefix attrs before the message, we need to know where the message starts
+	// and whether the first attr appended from this point has skipped attrSep
+	// (it happens if there were no attrs yet and that attr has no Format).
 	state.bufStart = sepNone
 	messagePos := state.buf.Len()
 	// message
@@ -384,7 +383,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	return err
 }
 
-// handleState holds state for a single call to LayoutHandler.Handle.
+// handleState holds state for a single call to LayoutHandler.Handle or WithAttrs.
 type handleState struct {
 	h           *LayoutHandler
 	layoutAttrs layoutAttrs
@@ -580,7 +579,6 @@ func (s *handleState) appendAttrs(as []Attr) {
 
 // appendAttr appends the Attr's key and value.
 // It handles replacement and checking for an empty key.
-// It reports whether something was appended.
 //
 //nolint:gocognit // Handles group inlining, ReplaceAttr, Source and layout redirection in one pass.
 func (s *handleState) appendAttr(a Attr) {

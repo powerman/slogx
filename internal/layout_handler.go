@@ -186,6 +186,8 @@ const (
 // LayoutHandler is a handler created by [NewLayoutHandler].
 type LayoutHandler struct {
 	opts                   *LayoutHandlerOptions
+	timeInLayout           bool        // is TimeKey in PrefixKeys or SuffixKeys?
+	levelInLayout          bool        // is LevelKey in PrefixKeys or SuffixKeys?
 	layoutAttrs            layoutAttrs // preformatted prefix and suffix attrs
 	preformattedAttrs      []byte
 	preformattedAttrsStart startSepState
@@ -226,16 +228,20 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	opts.SuffixKeys = suffixKeys
 
 	return &LayoutHandler{
-		opts:        opts,
-		layoutAttrs: makeLayoutAttrs(opts),
-		mu:          &sync.Mutex{},
-		w:           w,
+		opts:          opts,
+		timeInLayout:  seen[TimeKey],
+		levelInLayout: seen[LevelKey],
+		layoutAttrs:   makeLayoutAttrs(opts),
+		mu:            &sync.Mutex{},
+		w:             w,
 	}
 }
 
 func (h *LayoutHandler) clone() *LayoutHandler {
 	return &LayoutHandler{
 		opts:                   h.opts,
+		timeInLayout:           h.timeInLayout,
+		levelInLayout:          h.levelInLayout,
 		layoutAttrs:            h.layoutAttrs.clone(),
 		preformattedAttrs:      slices.Clip(h.preformattedAttrs),
 		preformattedAttrsStart: h.preformattedAttrsStart,
@@ -303,7 +309,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	if !r.Time.IsZero() {
 		key := TimeKey
 		val := r.Time.Round(0) // strip monotonic to match Attr behavior
-		if _, ok := h.opts.Format[key]; rep == nil && !ok {
+		if _, ok := h.opts.Format[key]; rep == nil && !ok && !h.timeInLayout {
 			state.appendKey(key)
 			state.appendTime(key, val)
 		} else {
@@ -313,7 +319,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// level
 	key := LevelKey
 	val := r.Level
-	if _, ok := h.opts.Format[key]; rep == nil && !ok {
+	if _, ok := h.opts.Format[key]; rep == nil && !ok && !h.levelInLayout {
 		state.appendKey(key)
 		state.appendString(val.String(), noFormat)
 	} else {

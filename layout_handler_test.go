@@ -689,6 +689,49 @@ func TestLayoutHandler_Layout(t *testing.T) {
 			L{"e", "d", "c", "b", "a"},
 			`^time=\S+ level=INFO msg=test e=5 d=4 c=3 b=2 a=1$`,
 		},
+		// Built-in keys without Format.
+		{
+			"suffix time",
+			nil,
+			nil,
+			L{"time"},
+			`^level=INFO msg=test a=1 b=2 c=3 d=4 e=5 time=\S+$`,
+		},
+		{
+			"suffix level",
+			nil,
+			nil,
+			L{"level"},
+			`^time=\S+ msg=test a=1 b=2 c=3 d=4 e=5 level=INFO$`,
+		},
+		{
+			"prefix level time",
+			nil,
+			L{"level", "time"},
+			nil,
+			`^level=INFO time=\S+ msg=test a=1 b=2 c=3 d=4 e=5$`,
+		},
+		{
+			"prefix time suffix level",
+			nil,
+			L{"time"},
+			L{"level"},
+			`^time=\S+ msg=test a=1 b=2 c=3 d=4 e=5 level=INFO$`,
+		},
+		{
+			"prefix level suffix time",
+			nil,
+			L{"level"},
+			L{"time"},
+			`^level=INFO msg=test a=1 b=2 c=3 d=4 e=5 time=\S+$`,
+		},
+		{
+			"suffix level time with prefix attr",
+			nil,
+			L{"e"},
+			L{"level", "time", "a"},
+			`^e=5 msg=test b=2 c=3 d=4 level=INFO time=\S+ a=1$`,
+		},
 		{
 			"prefix suffix duplicates and missing",
 			nil,
@@ -743,6 +786,31 @@ func TestLayoutHandler_BuiltInLayoutKeyNotShared(tt *testing.T) {
 	noTime := slog.NewRecord(time.Time{}, slog.LevelInfo, "second", 0)
 	t.Nil(h.Handle(ctx, noTime))
 	t.Equal(buf.String(), " INFO msg=second\n")
+}
+
+func TestLayoutHandler_BuiltInLayoutKeyRecordTimeFormat(tt *testing.T) {
+	tt.Parallel()
+
+	for _, replace := range []bool{false, true} {
+		tt.Run(fmt.Sprintf("replace=%v", replace), func(tt *testing.T) {
+			tt.Parallel()
+			t := check.Must(tt)
+
+			var replaceAttr func([]string, slog.Attr) slog.Attr
+			if replace { // Disables the fast path for built-in attrs.
+				replaceAttr = func(_ []string, a slog.Attr) slog.Attr { return a }
+			}
+			var buf bytes.Buffer
+			h := slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+				ReplaceAttr:      replaceAttr,
+				RecordTimeFormat: time.DateOnly,
+				SuffixKeys:       []string{slog.TimeKey},
+			})
+			r := slog.NewRecord(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC), slog.LevelInfo, "msg", 0)
+			t.Nil(h.Handle(tt.Context(), r))
+			t.Equal(buf.String(), "level=INFO msg=msg time=2006-01-02\n")
+		})
+	}
 }
 
 func TestLayoutHandler_ConcurrentHandle(tt *testing.T) {

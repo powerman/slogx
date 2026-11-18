@@ -420,12 +420,14 @@ type handleState struct {
 	// slotBufs are pooled buffers for layoutAttrs values written by a private handleState,
 	// kept across reuses of handleState.
 	slotBufs [][]byte
-	private  bool // are layoutAttrs private (see newPrivateHandleState)?
-	buf      *buffer.Buffer
-	freeBuf  bool // should buf be freed?
-	bufStart startSepState
-	prefix   *buffer.Buffer // key prefix
-	groups   *[]string      // pool-allocated slice of active groups, for ReplaceAttr
+	// prefixBuf is a pooled backing buffer for prefix, kept across reuses of handleState.
+	prefixBuf []byte
+	private   bool // are layoutAttrs private (see newPrivateHandleState)?
+	buf       *buffer.Buffer
+	freeBuf   bool // should buf be freed?
+	bufStart  startSepState
+	prefix    *buffer.Buffer // key prefix
+	groups    *[]string      // pool-allocated slice of active groups, for ReplaceAttr
 }
 
 type origBuf struct {
@@ -513,7 +515,7 @@ func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buff
 	s.buf = buf
 	s.freeBuf = freeBuf
 	s.bufStart = sepNone
-	s.prefix = buffer.New()
+	s.prefix = (*buffer.Buffer)(&s.prefixBuf)
 	if h.opts.ReplaceAttr != nil {
 		s.groups = groupPool.Get().(*[]string)
 		*s.groups = append(*s.groups, h.groups...)
@@ -545,16 +547,19 @@ func (s *handleState) free() {
 		*gs = (*gs)[:0]
 		groupPool.Put(gs)
 	}
-	s.prefix.Free()
 	for i, b := range s.slotBufs {
 		if cap(b) > maxPooledBufSize {
 			s.slotBufs[i] = nil
 		}
 	}
+	if cap(s.prefixBuf) > maxPooledBufSize {
+		s.prefixBuf = nil
+	}
 	clear(s.layoutAttrsBuf) // avoid retaining attrs of this call
 	*s = handleState{       // avoid retaining other references
 		layoutAttrsBuf: s.layoutAttrsBuf[:0],
 		slotBufs:       s.slotBufs,
+		prefixBuf:      s.prefixBuf[:0],
 	}
 	handleStatePool.Put(s)
 }

@@ -32,6 +32,9 @@ const (
 	groupsSlicePrealloc   = 10 // Nesting depth of groups seen by ReplaceAttr.
 )
 
+// Larger pooled buffers are dropped to reduce peak allocation, same limit as in buffer.Free.
+const maxPooledBufSize = 16 << 10
+
 // AttrFormat specifies how to format an attribute.
 //
 // Value {MaxWidth: -1} results in outputting just the value, without attrSep, key and '='.
@@ -543,6 +546,11 @@ func (s *handleState) free() {
 		groupPool.Put(gs)
 	}
 	s.prefix.Free()
+	for i, b := range s.slotBufs {
+		if cap(b) > maxPooledBufSize {
+			s.slotBufs[i] = nil
+		}
+	}
 	clear(s.layoutAttrsBuf) // avoid retaining attrs of this call
 	*s = handleState{       // avoid retaining other references
 		layoutAttrsBuf: s.layoutAttrsBuf[:0],

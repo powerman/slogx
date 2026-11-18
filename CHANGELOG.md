@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-11-18
+
+### ⚡ Performance
+
+- Speed up GroupOrAttrs.Record for goa without groups by @powerman in [de2e60f]
+
+### 📦️ Dependencies
+
+- **(deps)** Bump powerman/check to v1.14.1 and golang.org/x/text to v0.44.0 by @powerman in [718bc30]
+
+[0.5.1]: https://github.com/powerman/slogx/compare/v0.5.0..v0.5.1
+[de2e60f]: https://github.com/powerman/slogx/commit/de2e60fd17dac547c183cdf3be6b98b42c949f39
+[718bc30]: https://github.com/powerman/slogx/commit/718bc300ce31fa9d0f6be15e7bd42401b7a20179
+
 ## [0.5.0] - 2026-11-18
 
 ### 🚀 Added

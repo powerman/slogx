@@ -849,9 +849,9 @@ func (s *handleState) appendValue(key string, v Value, format AttrFormat) {
 func (s *handleState) appendTime(key string, t time.Time) {
 	switch {
 	case key == TimeKey && s.h.opts.RecordTimeFormat != "":
-		s.buf.WriteString(t.Format(s.h.opts.RecordTimeFormat))
+		*s.buf = t.AppendFormat(*s.buf, s.h.opts.RecordTimeFormat)
 	case key != TimeKey && s.h.opts.TimeFormat != "":
-		s.buf.WriteString(t.Format(s.h.opts.TimeFormat))
+		*s.buf = t.AppendFormat(*s.buf, s.h.opts.TimeFormat)
 	default:
 		*s.buf = appendRFC3339Millis(*s.buf, t)
 	}

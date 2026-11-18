@@ -699,31 +699,14 @@ func (s *handleState) appendFormatValue(key string, v Value, format AttrFormat) 
 	n := 0
 	// Detect quoted values to close the quote after truncation.
 	quoted := pos < s.buf.Len() && (*s.buf)[pos] == '"'
-	// If Alternate is false, we cut from the end.
-	// Position after value's last rune that fits into MaxWidth (when enforced).
+	// Position after value's last rune that fits into MaxWidth when we cut from the end.
 	// The last rune is MaxWidth-1 for unquoted values and MaxWidth-2 for quoted.
-	cutPos := pos // Valid for MaxWidth=1 and quoted MaxWidth=2.
-	// If Alternate is true, we cut from the beginning.
-	// Position of the first rune that does fit into MaxWidth.
-	// The first rune is MaxWidth-1 from the end for unquoted values and
-	// MaxWidth-2 from the end for quoted values.
-	startPos := pos
-	//nolint:nestif // Computing cutPos/startPos for both truncation directions needs this branching.
+	cutPos := pos
 	if nMax := max(format.MinWidth, format.MaxWidth); nMax > 0 {
-		var sizes []int // Ring buffer of rune sizes for Alternate.
-		if format.TruncFromStart && format.MaxWidth > 0 {
-			sizes = make([]int, format.MaxWidth)
-		}
-		for i := pos; i < s.buf.Len() && (n <= nMax || format.TruncFromStart); {
+		for i := pos; i < s.buf.Len() && n <= nMax; {
 			_, size := utf8.DecodeRune((*s.buf)[i:])
 			i += size
 			n++
-			if len(sizes) > 0 {
-				if n > format.MaxWidth {
-					startPos += sizes[n%len(sizes)]
-				}
-				sizes[n%len(sizes)] = size
-			}
 			// Update cutPos for unquoted MaxWidth>=2 and quoted MaxWidth>2.
 			switch {
 			case format.MaxWidth >= 2 && !quoted && n == format.MaxWidth-1:
@@ -732,54 +715,35 @@ func (s *handleState) appendFormatValue(key string, v Value, format AttrFormat) 
 				cutPos = i
 			}
 		}
-		if len(sizes) > 0 && n > format.MaxWidth {
-			startPos += sizes[(n+1)%len(sizes)] // Skip 1 for … marker.
-			if quoted && len(sizes) > 1 {
-				startPos += sizes[(n+2)%len(sizes)] //nolint:mnd // Skip 1 for opening quote, on top of the …  marker above.
-			}
-		}
 	}
-	//nolint:nestif // Truncation has separate quoted/unquoted and start/end cases.
 	if w := format.MaxWidth; w > 0 && n > w {
-		if format.TruncFromStart {
-			switch {
-			case w == 1:
-				s.buf.SetLen(pos)
-				s.buf.WriteString(`…`)
-			case quoted && w == 2:
-				s.buf.SetLen(pos)
-				s.buf.WriteString(`……`)
-			default:
-				var buf []byte
-				overwrite := 3 // 3 byte for …
-				if quoted {
-					overwrite++ // 1 byte for opening quote
-				}
-				if startPos-pos >= overwrite {
-					buf = (*s.buf)[startPos:]
-				} else {
-					buf = append([]byte(nil), (*s.buf)[startPos:]...)
-				}
-				s.buf.SetLen(pos)
-				if quoted {
-					s.buf.WriteString(`"…`)
-				} else {
-					s.buf.WriteString(`…`)
-				}
-				s.buf.Write(buf)
+		switch {
+		case w == 1:
+			s.buf.SetLen(pos)
+			s.buf.WriteString(`…`)
+		case quoted && w == 2:
+			s.buf.SetLen(pos)
+			s.buf.WriteString(`……`)
+		case format.TruncFromStart:
+			// Keep the last runes which fit into MaxWidth after the marker,
+			// including the closing quote of quoted values.
+			marker, keep := "…", w-1
+			if quoted {
+				marker = `"…`
+				keep--
 			}
-		} else {
+			startPos := s.buf.Len()
+			for range keep {
+				_, size := utf8.DecodeLastRune((*s.buf)[pos:startPos])
+				startPos -= size
+			}
+			*s.buf = slices.Replace(*s.buf, pos, startPos, []byte(marker)...)
+		case quoted:
 			s.buf.SetLen(cutPos)
-			switch {
-			case !quoted:
-				s.buf.WriteString(`…`)
-			case w == 1:
-				s.buf.WriteString(`…`)
-			case w == 2: //nolint:mnd // Width in runes for the "two ellipsis chars, no quotes fit" case.
-				s.buf.WriteString(`……`)
-			default:
-				s.buf.WriteString(`…"`)
-			}
+			s.buf.WriteString(`…"`)
+		default:
+			s.buf.SetLen(cutPos)
+			s.buf.WriteString(`…`)
 		}
 		n = w
 	}

@@ -25,6 +25,19 @@ designed to make output easier to read with:
 - Vertical align for prefix attrs by enforcing min/max value width.
 - Color output for given attrs.
 
+### BootstrapHandler
+
+`BootstrapHandler` holds log records in memory during the bootstrap of a process,
+until the application knows what, how and where to log
+(e.g. flags are parsed, so the level and the format are known).
+Then `HandOffTo` replays held records through the real handler
+and `BootstrapHandler` becomes a pass-through to it
+(replacing `BootstrapHandler` by the real handler is optional:
+it saves one extra call per record).
+
+- Works with any logging style: default logger, logger in a variable, handler in a context.
+- Logging from the real handler, `String` or `MarshalJSON` of a value can't deadlock it.
+
 ## Recommendations
 
 ### Use NewContextHandler with linter

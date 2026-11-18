@@ -15,6 +15,10 @@ Package slogx contains extensions for [log/slog].
     [NewDefaultContextLogger] provides a compatibility with third-party libraries
     which use non-Context-aware slog functions/methods.
     [NewContextMiddleware] provides a compatibility with [github.com/samber/slog-multi.Pipe].
+  - [NewBootstrapHandler] holds records during the bootstrap of a process,
+    until the application knows what, how and where to log (e.g. flags are parsed),
+    then replays them through the real handler and becomes a pass-through to it.
+    See [BootstrapHandlerConfig] for details.
   - [WrapHandler] is a building block for handlers that want to wrap another handler.
     See [WrapHandlerConfig] for details.
     [NewWrapMiddleware] provides a compatibility with [github.com/samber/slog-multi.Pipe].

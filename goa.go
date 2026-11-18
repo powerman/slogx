@@ -109,6 +109,19 @@ func (g *GroupOrAttrs) All() iter.Seq2[string, slog.Attr] {
 	}
 }
 
+// handler returns next with all groups and attrs of g applied in the order they were added.
+// It does not modify g.
+func (g *GroupOrAttrs) handler(next slog.Handler) slog.Handler {
+	for _, v := range slices.Backward(g.reverse()) {
+		if v.group != "" {
+			next = next.WithGroup(v.group)
+		} else {
+			next = next.WithAttrs(slices.Clone(v.attrs))
+		}
+	}
+	return next
+}
+
 // Reverse returns a slice of GroupOrAttrs in reverse order.
 // The slice contains either a group with an empty attrs, or attrs with an empty group.
 // If there are no groups or attrs, reverse returns nil.

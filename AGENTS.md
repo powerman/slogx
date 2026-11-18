@@ -51,7 +51,7 @@ keep tests independent of path separators and line endings.
   the actual handler, with attrs/groups added by `ContextWith*`,
   is stored in a `context.Context`.
 - Wrapping handlers also provide a `NewXxxMiddleware` constructor
-  for use with `github.com/samber/slog-multi` (`NewWrapMiddleware`, `NewContextMiddleware`).
+  for use with `github.com/samber/slog-multi`.
 
 ---
 

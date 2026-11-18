@@ -14,10 +14,11 @@ import (
 //
 // Zero value and nil are valid and represent no groups or attrs.
 type GroupOrAttrs struct {
-	group string      // Group name if non-empty.
-	attrs []slog.Attr // Attrs if non-empty.
-	total int         // Total number of attrs and groups in this and all prev.
-	prev  *GroupOrAttrs
+	group     string      // Group name if non-empty.
+	attrs     []slog.Attr // Attrs if non-empty.
+	total     int         // Total number of attrs and groups in this and all prev.
+	hasGroups bool        // Whether this or any prev is a group.
+	prev      *GroupOrAttrs
 }
 
 // Total returns the total number of attrs and groups added to g.
@@ -38,9 +39,10 @@ func (g *GroupOrAttrs) WithAttrs(attrs []slog.Attr) *GroupOrAttrs {
 		g = nil
 	}
 	return &GroupOrAttrs{
-		attrs: attrs,
-		total: g.Total() + len(attrs),
-		prev:  g,
+		attrs:     attrs,
+		total:     g.Total() + len(attrs),
+		hasGroups: g != nil && g.hasGroups,
+		prev:      g,
 	}
 }
 
@@ -54,9 +56,10 @@ func (g *GroupOrAttrs) WithGroup(name string) *GroupOrAttrs {
 		g = nil
 	}
 	return &GroupOrAttrs{
-		group: name,
-		total: g.Total() + 1,
-		prev:  g,
+		group:     name,
+		total:     g.Total() + 1,
+		hasGroups: true,
+		prev:      g,
 	}
 }
 
@@ -64,6 +67,10 @@ func (g *GroupOrAttrs) WithGroup(name string) *GroupOrAttrs {
 func (g *GroupOrAttrs) Record(r slog.Record) slog.Record {
 	if g.Total() == 0 {
 		return r
+	}
+
+	if !g.hasGroups { // Optimize for the common case of no groups.
+		return g.recordWithoutGroups(r)
 	}
 
 	attrs := make([]slog.Attr, 0, r.NumAttrs()+g.Total())
@@ -80,6 +87,34 @@ func (g *GroupOrAttrs) Record(r slog.Record) slog.Record {
 			attrs[0] = slog.Attr{Key: g.group, Value: slog.GroupValue(groupAttrs...)}
 		}
 	}
+
+	r2 := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
+	r2.AddAttrs(attrs...)
+	return r2
+}
+
+// recordWithoutGroups is Record for g which has no groups.
+//
+// While the attrs fit into the stack buffer,
+// the only allocation is the overflow slice of the record (needed for more than 5 attrs).
+func (g *GroupOrAttrs) recordWithoutGroups(r slog.Record) slog.Record {
+	const stackAttrs = 16 // The number of attrs collected without allocating.
+	var buf [stackAttrs]slog.Attr
+
+	attrs := buf[:0]
+	n := g.total + r.NumAttrs()
+	if n > len(buf) {
+		attrs = make([]slog.Attr, 0, n)
+	}
+	attrs = attrs[:g.total]
+
+	// The chain is walked from the newest to the oldest, so fill attrs from the end.
+	i := len(attrs)
+	for cur := g; cur != nil; cur = cur.prev {
+		i -= len(cur.attrs)
+		copy(attrs[i:], cur.attrs)
+	}
+	r.Attrs(func(a slog.Attr) bool { attrs = append(attrs, a); return true })
 
 	r2 := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
 	r2.AddAttrs(attrs...)
@@ -125,7 +160,8 @@ func (g *GroupOrAttrs) Handler(next slog.Handler) slog.Handler {
 // Reverse returns a slice of GroupOrAttrs in reverse order.
 // The slice contains either a group with an empty attrs, or attrs with an empty group.
 // If there are no groups or attrs, reverse returns nil.
-// Returned values are copies of g's values with prev set to nil and total set to 0.
+// Returned values are copies of g's values with prev set to nil,
+// total set to 0 and hasGroups set to false.
 func (g *GroupOrAttrs) reverse() []GroupOrAttrs {
 	if g.Total() == 0 {
 		return nil

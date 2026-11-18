@@ -2,7 +2,9 @@ package slogx_test
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/powerman/slogx"
+	"github.com/powerman/slogx/internal/race"
 )
 
 func TestGroupOrAttrs_Total(t *testing.T) {
@@ -217,6 +220,12 @@ func TestGroupOrAttrs_Record(t *testing.T) {
 			[]slog.Attr{slog.Int("b", 2), slog.Int("c", 3), slog.Int("a", 1)},
 		},
 		{
+			"empty groups are dropped",
+			new(slogx.GroupOrAttrs).WithAttrs([]slog.Attr{slog.Int("b", 2), slog.Group("e")}),
+			makeRecord("msg", slog.Group("e"), slog.Int("a", 1)),
+			[]slog.Attr{slog.Int("b", 2), slog.Int("a", 1)},
+		},
+		{
 			"single group",
 			new(slogx.GroupOrAttrs).WithGroup("g1"),
 			makeRecord("msg", slog.Int("a", 1)),
@@ -268,6 +277,121 @@ func TestGroupOrAttrs_Record(t *testing.T) {
 			result := tc.goa.Record(tc.r)
 			got := collectAttrs(result)
 			t.DeepEqual(got, tc.want)
+		})
+	}
+}
+
+// TestGroupOrAttrs_Record_ManyAttrs covers all combinations around the number of attrs
+// which slog.Record keeps inline (5), for a goa without groups.
+func TestGroupOrAttrs_Record_ManyAttrs(t *testing.T) {
+	t.Parallel()
+
+	sum := func(xs []int) (total int) {
+		for _, x := range xs {
+			total += x
+		}
+		return total
+	}
+
+	for _, chain := range [][]int{{3}, {1, 1, 1}, {7}, {2, 2, 2}, {1, 5, 1, 4}, slices.Repeat([]int{1}, 40)} {
+		for _, recAttrs := range []int{0, 1, 2, 3, 5, 6, 9} {
+			name := fmt.Sprintf("%d calls/%d attrs/r%d", len(chain), sum(chain), recAttrs)
+			t.Run(name, func(tt *testing.T) {
+				tt.Parallel()
+				t := check.Must(tt)
+
+				var goa *slogx.GroupOrAttrs
+				var want []slog.Attr
+				for i, n := range chain {
+					attrs := make([]slog.Attr, n)
+					for j := range attrs {
+						attrs[j] = slog.Int(fmt.Sprintf("g%d_%d", i, j), i*100+j)
+					}
+					goa = goa.WithAttrs(slices.Clone(attrs))
+					want = append(want, attrs...)
+				}
+				recordAttrs := make([]slog.Attr, 0, recAttrs)
+				for i := range recAttrs {
+					recordAttrs = append(recordAttrs, slog.Int(fmt.Sprintf("r%d", i), i))
+				}
+				want = append(want, recordAttrs...)
+
+				r := makeRecord("msg", recordAttrs...)
+				result := goa.Record(r)
+				t.DeepEqual(collectAttrs(result), want)
+				t.Equal(result.NumAttrs(), len(want))
+				// The original is not modified.
+				t.True(slices.EqualFunc(collectAttrs(r), recordAttrs, slog.Attr.Equal))
+			})
+		}
+	}
+}
+
+// TestGroupOrAttrs_Record_Allocs is not parallel:
+// AllocsPerRun counts allocations of the whole process.
+func TestGroupOrAttrs_Record_Allocs(tt *testing.T) { //nolint:paralleltest // See above.
+	if race.Enabled {
+		tt.Skip("skipping test in race mode")
+	}
+	t := check.Must(tt)
+
+	// While all attrs fit into slog.Record's inline storage, Record must not allocate.
+	// This also guards the assumption about that size (nAttrsInline in log/slog).
+	attrs := func(n int) []slog.Attr {
+		as := make([]slog.Attr, n)
+		for i := range as {
+			as[i] = slog.Int("k", i)
+		}
+		return as
+	}
+	for _, tc := range []struct {
+		goa    []int
+		rec    int
+		allocs float64
+	}{
+		{[]int{2}, 0, 0},
+		{[]int{2}, 1, 0},
+		{[]int{2, 2}, 1, 0},
+		{[]int{1, 1, 1, 1}, 1, 0},
+		{[]int{3}, 2, 0},
+		{[]int{5}, 0, 0},
+		{[]int{1}, 4, 0},
+		// Above the inline storage: only the overflow slice of the record while it fits the stack buffer.
+		{[]int{2}, 5, 1},
+		{[]int{1, 1, 1, 1, 1, 1}, 1, 1},
+		{[]int{8, 4}, 4, 1},
+	} {
+		var goa *slogx.GroupOrAttrs
+		for _, n := range tc.goa {
+			goa = goa.WithAttrs(attrs(n))
+		}
+		r := makeRecord("msg", attrs(tc.rec)...)
+		allocs := testing.AllocsPerRun(100, func() { sinkRecord = goa.Record(r) })
+		t.Equal(allocs, tc.allocs, "goa %v rec %d", tc.goa, tc.rec)
+	}
+}
+
+// TestGroupOrAttrs_Record_EmptyGroups checks that empty groups, which are counted by Total
+// but dropped by slog.Record, don't break any of the paths of Record without groups.
+func TestGroupOrAttrs_Record_EmptyGroups(t *testing.T) {
+	t.Parallel()
+
+	for _, calls := range []int{1, 2, 3, 6, 12, 20} {
+		t.Run(fmt.Sprintf("%d calls", calls), func(tt *testing.T) {
+			tt.Parallel()
+			t := check.Must(tt)
+
+			var goa *slogx.GroupOrAttrs
+			want := make([]slog.Attr, 0, calls+1)
+			for i := range calls {
+				a := slog.Int(fmt.Sprintf("g%d", i), i)
+				goa = goa.WithAttrs([]slog.Attr{slog.Group("e"), a, slog.Group("e")})
+				want = append(want, a)
+			}
+			recordAttrs := []slog.Attr{slog.Group("e"), slog.Int("r", 1), slog.Group("e")}
+			want = append(want, slog.Int("r", 1))
+
+			t.DeepEqual(collectAttrs(goa.Record(makeRecord("msg", recordAttrs...))), want)
 		})
 	}
 }

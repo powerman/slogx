@@ -119,31 +119,51 @@ func (h *WrapHandler) Handle(ctx context.Context, r slog.Record) error {
 // WithAttrs implements [slog.Handler] interface.
 func (h *WrapHandler) WithAttrs(as []slog.Attr) slog.Handler {
 	if h.cfg.ProxyWith || (h.cfg.ProxyWithAttrs && h.goa == nil) {
-		if next := h.next.WithAttrs(as); next != h.next {
-			h2 := *h
-			h2.next = next
-			return &h2
+		next := h.next.WithAttrs(as)
+		if sameHandler(next, h.next) {
+			return h
 		}
-	} else if goa := h.goa.WithAttrs(as); goa != h.goa {
-		h2 := *h
-		h2.goa = goa
-		return &h2
+		return h.withNext(next)
 	}
-	return h
+	goa := h.goa.WithAttrs(as)
+	if goa == h.goa {
+		return h
+	}
+	return h.withGoa(goa)
 }
 
 // WithGroup implements [slog.Handler] interface.
 func (h *WrapHandler) WithGroup(name string) slog.Handler {
 	if h.cfg.ProxyWith {
-		if next := h.next.WithGroup(name); next != h.next {
-			h2 := *h
-			h2.next = next
-			return &h2
+		next := h.next.WithGroup(name)
+		if sameHandler(next, h.next) {
+			return h
 		}
-	} else if goa := h.goa.WithGroup(name); goa != h.goa {
-		h2 := *h
-		h2.goa = goa
-		return &h2
+		return h.withNext(next)
 	}
-	return h
+	goa := h.goa.WithGroup(name)
+	if goa == h.goa {
+		return h
+	}
+	return h.withGoa(goa)
+}
+
+func (h *WrapHandler) withNext(next slog.Handler) *WrapHandler {
+	h2 := *h
+	h2.next = next
+	return &h2
+}
+
+func (h *WrapHandler) withGoa(goa *GroupOrAttrs) *WrapHandler {
+	h2 := *h
+	h2.goa = goa
+	return &h2
+}
+
+// sameHandler reports whether a and b are equal.
+// Values of an uncomparable type (e.g. a struct with a slice field) are never equal,
+// because comparing them with == panics.
+func sameHandler(a, b slog.Handler) (same bool) {
+	defer func() { _ = recover() }()
+	return a == b
 }

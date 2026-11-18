@@ -109,3 +109,30 @@ func BenchmarkWrapHandler_Logger(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkWrapHandler_With measures deriving a proxying WrapHandler,
+// both when next returns itself and when it returns a new handler.
+func BenchmarkWrapHandler_With(b *testing.B) {
+	attrs := []slog.Attr{slog.Int("a", 1)}
+	nexts := []benchNextHandler{
+		{"nop", nopHandler{}},
+		{"discard", slog.DiscardHandler},
+		{"text", slog.NewTextHandler(io.Discard, nil)},
+		{"uncomparable", uncomparableHandler{out: new([]string)}},
+	}
+	for _, next := range nexts {
+		h := slogx.NewWrapHandler(next.h, slogx.WrapHandlerConfig{ProxyWith: true})
+		b.Run(next.name+"/attrs", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				h.WithAttrs(attrs)
+			}
+		})
+		b.Run(next.name+"/group", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				h.WithGroup("g")
+			}
+		})
+	}
+}

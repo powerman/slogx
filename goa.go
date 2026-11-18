@@ -109,9 +109,9 @@ func (g *GroupOrAttrs) All() iter.Seq2[string, slog.Attr] {
 	}
 }
 
-// handler returns next with all groups and attrs of g applied in the order they were added.
+// Handler returns next with all groups and attrs of g applied in the order they were added.
 // It does not modify g.
-func (g *GroupOrAttrs) handler(next slog.Handler) slog.Handler {
+func (g *GroupOrAttrs) Handler(next slog.Handler) slog.Handler {
 	for _, v := range slices.Backward(g.reverse()) {
 		if v.group != "" {
 			next = next.WithGroup(v.group)

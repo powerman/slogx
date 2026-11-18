@@ -1,11 +1,13 @@
 package slogx_test
 
 import (
+	"bytes"
 	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/powerman/check"
+	"go.uber.org/mock/gomock"
 
 	"github.com/powerman/slogx"
 )
@@ -553,6 +555,135 @@ func TestGroupOrAttrs_ChainedOperations(tt *testing.T) {
 	t.Equal(len(g3Attrs), 1)
 	t.Equal(g3Attrs[0].Key, "d")
 	t.Equal(g3Attrs[0].Value.Int64(), int64(4))
+}
+
+func TestGroupOrAttrs_Handler_NoGroupsOrAttrs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		goa  *slogx.GroupOrAttrs
+	}{
+		{"nil goa", nil},
+		{"zero goa", &slogx.GroupOrAttrs{}},
+		{"empty attrs", new(slogx.GroupOrAttrs).WithAttrs([]slog.Attr{slog.Group("empty")})},
+		{"empty group name", new(slogx.GroupOrAttrs).WithGroup("")},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+			t := check.Must(tt)
+			// Mock without expectations fails the test on any call.
+			next := NewMockHandler(gomock.NewController(tt))
+			t.Equal(tc.goa.Handler(next), slog.Handler(next))
+		})
+	}
+}
+
+func TestGroupOrAttrs_Handler_CallOrder(tt *testing.T) {
+	tt.Parallel()
+	t := check.Must(tt)
+
+	ctrl := gomock.NewController(tt)
+	next := NewMockHandler(ctrl)
+	h1 := NewMockHandler(ctrl)
+	h2 := NewMockHandler(ctrl)
+	h3 := NewMockHandler(ctrl)
+	h4 := NewMockHandler(ctrl)
+	h5 := NewMockHandler(ctrl)
+	gomock.InOrder(
+		next.EXPECT().WithAttrs([]slog.Attr{slog.Int("a", 1)}).Return(h1),
+		h1.EXPECT().WithGroup("g1").Return(h2),
+		h2.EXPECT().WithAttrs([]slog.Attr{slog.Int("b", 2), slog.Int("c", 3)}).Return(h3),
+		h3.EXPECT().WithGroup("g2").Return(h4),
+		h4.EXPECT().WithAttrs([]slog.Attr{slog.Int("d", 4)}).Return(h5),
+	)
+
+	goa := new(slogx.GroupOrAttrs).
+		WithAttrs([]slog.Attr{slog.Int("a", 1)}).
+		WithGroup("g1").
+		WithAttrs([]slog.Attr{slog.Int("b", 2), slog.Int("c", 3)}).
+		WithGroup("g2").
+		WithAttrs([]slog.Attr{slog.Int("d", 4)})
+
+	t.Equal(goa.Handler(next), slog.Handler(h5))
+}
+
+func TestGroupOrAttrs_Handler_ClonesAttrs(tt *testing.T) {
+	tt.Parallel()
+	t := check.Must(tt)
+
+	ctrl := gomock.NewController(tt)
+	next := NewMockHandler(ctrl)
+	derived := NewMockHandler(ctrl)
+	next.EXPECT().WithAttrs(gomock.Any()).DoAndReturn(func(attrs []slog.Attr) slog.Handler {
+		// A handler is allowed to modify the slice it received.
+		attrs[0] = slog.Int("modified", 0)
+		return derived
+	}).Times(2)
+
+	goa := new(slogx.GroupOrAttrs).WithAttrs([]slog.Attr{slog.Int("a", 1)})
+
+	t.Equal(goa.Handler(next), slog.Handler(derived))
+	t.Equal(goa.Handler(next), slog.Handler(derived))
+	for key, attr := range goa.All() {
+		t.Equal(key, "")
+		t.DeepEqual(attr, slog.Int("a", 1))
+	}
+}
+
+func TestGroupOrAttrs_Handler_Output(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		goa  *slogx.GroupOrAttrs
+		want func(slog.Handler) slog.Handler
+	}{
+		{
+			"attrs",
+			new(slogx.GroupOrAttrs).WithAttrs([]slog.Attr{slog.Int("a", 1)}),
+			func(h slog.Handler) slog.Handler {
+				return h.WithAttrs([]slog.Attr{slog.Int("a", 1)})
+			},
+		},
+		{
+			"groups",
+			new(slogx.GroupOrAttrs).WithGroup("g1").WithGroup("g2"),
+			func(h slog.Handler) slog.Handler {
+				return h.WithGroup("g1").WithGroup("g2")
+			},
+		},
+		{
+			"mixed",
+			new(slogx.GroupOrAttrs).
+				WithAttrs([]slog.Attr{slog.Int("a", 1)}).
+				WithGroup("g1").
+				WithAttrs([]slog.Attr{slog.Int("b", 2), slog.Int("c", 3)}).
+				WithGroup("g2"),
+			func(h slog.Handler) slog.Handler {
+				return h.
+					WithAttrs([]slog.Attr{slog.Int("a", 1)}).
+					WithGroup("g1").
+					WithAttrs([]slog.Attr{slog.Int("b", 2), slog.Int("c", 3)}).
+					WithGroup("g2")
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+			t := check.Must(tt)
+
+			var got, want bytes.Buffer
+			opts := &slog.HandlerOptions{ReplaceAttr: removeTime}
+			r := makeRecord("msg", slog.Int("r", 0))
+
+			t.Nil(tc.goa.Handler(slog.NewJSONHandler(&got, opts)).Handle(tt.Context(), r))
+			t.Nil(tc.want(slog.NewJSONHandler(&want, opts)).Handle(tt.Context(), r))
+			t.Equal(got.String(), want.String())
+		})
+	}
 }
 
 func makeRecord(msg string, attrs ...slog.Attr) slog.Record {

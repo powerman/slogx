@@ -303,7 +303,7 @@ func (s *bootstrapState) handOff() {
 	handler := func(goa *GroupOrAttrs) slog.Handler {
 		h, ok := derived[goa]
 		if !ok {
-			h = goa.handler(base)
+			h = goa.Handler(base)
 			derived[goa] = h
 		}
 		return h

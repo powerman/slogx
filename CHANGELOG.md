@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-18
+
+### 🚀 Added
+
+- Add WrapHandlerConfig.Resolve by @powerman in [4e1487e]
+- Add BootstrapHandler to hold records until handoff by @powerman in [b557904]
+
+### 🔔 Changed
+
+- Export GroupOrAttrs.Handler by @powerman in [8c65307]
+
+### 📚 Documentation
+
+- Add AGENTS.md project instructions and CLAUDE.md wrapper by @powerman in [3243ca1]
+
+[0.5.0]: https://github.com/powerman/slogx/compare/v0.4.0..v0.5.0
+[3243ca1]: https://github.com/powerman/slogx/commit/3243ca1cbfdf8d28750711b0f375b56ede99fa51
+[4e1487e]: https://github.com/powerman/slogx/commit/4e1487e0f311d36595cb50409aec42614cfe9c5a
+[b557904]: https://github.com/powerman/slogx/commit/b55790497b9cc40d284fdd6b60350b8e511dd373
+[8c65307]: https://github.com/powerman/slogx/commit/8c6530745807e3e9173977d16cd1b7f7eb92cd5a
+
 ## [0.4.0] - 2026-11-14
 
 ### 🚀 Added

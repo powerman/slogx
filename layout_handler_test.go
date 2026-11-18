@@ -800,6 +800,24 @@ func TestLayoutHandler_BuiltInLayoutKeyNotShared(tt *testing.T) {
 	t.Equal(buf.String(), " INFO msg=second\n")
 }
 
+// A record attr which overrides a layout attr added by With
+// must not modify the value used by the next records.
+func TestLayoutHandler_WithLayoutKeyNotShared(tt *testing.T) {
+	tt.Parallel()
+	t := check.Must(tt)
+
+	var buf bytes.Buffer
+	logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+		Format:     map[string]string{slog.TimeKey: "", slog.LevelKey: ""},
+		PrefixKeys: []string{"p"},
+		SuffixKeys: []string{"s"},
+	})).With("p", "WITH", "s", "WITH")
+
+	logger.Info("1", "p", "REC", "s", "REC")
+	logger.Info("2")
+	t.Equal(buf.String(), "p=REC msg=1 s=REC\np=WITH msg=2 s=WITH\n")
+}
+
 // Layout position depends only on the key,
 // so built-in attrs and other attrs with the same key are handled the same way:
 // the output must match the output of slog.TextHandler

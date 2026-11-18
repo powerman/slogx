@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"testing/slogtest"
 	"time"
@@ -719,6 +720,75 @@ func TestLayoutHandler_Layout(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A built-in attr which is a layout key must not leak into the next record,
+// even when that record has no attrs and no value for this built-in attr.
+func TestLayoutHandler_BuiltInLayoutKeyNotShared(tt *testing.T) {
+	tt.Parallel()
+	t := check.Must(tt)
+
+	var buf bytes.Buffer
+	h := slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+		Format:     map[string]string{slog.TimeKey: "[%v]", slog.LevelKey: " %v"},
+		PrefixKeys: []string{slog.TimeKey, slog.LevelKey},
+	})
+	ctx := tt.Context()
+
+	withTime := slog.NewRecord(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC), slog.LevelInfo, "first", 0)
+	t.Nil(h.Handle(ctx, withTime))
+	t.Match(buf.String(), `^\[2006-01-02T15:04:05\.000Z\] INFO msg=first\n$`)
+
+	buf.Reset()
+	noTime := slog.NewRecord(time.Time{}, slog.LevelInfo, "second", 0)
+	t.Nil(h.Handle(ctx, noTime))
+	t.Equal(buf.String(), " INFO msg=second\n")
+}
+
+func TestLayoutHandler_ConcurrentHandle(tt *testing.T) {
+	tt.Parallel()
+	t := check.Must(tt)
+
+	const goroutines, iterations = 8, 200
+
+	var buf syncBuffer
+	logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+		Format:     map[string]string{slog.TimeKey: "[%v]", slog.LevelKey: " %v"},
+		PrefixKeys: []string{slog.TimeKey, slog.LevelKey},
+	}))
+
+	var wg sync.WaitGroup
+	for range goroutines {
+		wg.Go(func() {
+			for range iterations {
+				logger.Info("msg")
+			}
+		})
+	}
+	wg.Wait()
+
+	lines := strings.Split(strings.TrimSuffix(buf.String(), "\n"), "\n")
+	t.Len(lines, goroutines*iterations)
+	for _, line := range lines {
+		t.Match(line, `^\[\S+\] INFO msg=msg$`)
+	}
+}
+
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 //nolint:paralleltest // Subtests share buf and logger, must run sequentially.

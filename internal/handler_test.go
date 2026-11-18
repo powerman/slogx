@@ -683,7 +683,7 @@ func BenchmarkAppendKey(b *testing.B) {
 			b.Run(fmt.Sprintf("%s_prefix_size_%d", quoting, size), func(b *testing.B) {
 				var (
 					hs = NewTextHandler(io.Discard, nil).next.(*LayoutHandler).
-						newHandleState(makeLayoutAttrs(nil), buffer.New(), false)
+						newHandleState(makeLayoutAttrs(&LayoutHandlerOptions{}), buffer.New(), false)
 					prefix = bytes.Repeat([]byte("x"), size)
 					key    = "key"
 				)

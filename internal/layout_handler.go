@@ -292,12 +292,8 @@ func (h *LayoutHandler) WithGroup(name string) Handler {
 //
 //nolint:funlen,gocognit // Inherent to assembling time/level/source/message/prefix/suffix in one pass.
 func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
-	var state *handleState
-	if r.NumAttrs() == 0 {
-		state = h.newHandleState(h.layoutAttrs, buffer.New(), true)
-	} else {
-		state = h.newHandleState(h.layoutAttrs.clone(), buffer.New(), true)
-	}
+	// Built-in attrs may be written to layoutAttrs too, so Handle must not share it.
+	state := h.newPrivateHandleState(h.layoutAttrs, buffer.New(), true)
 	defer state.free()
 	// Built-in attributes. They are not in a group.
 	stateGroups := state.groups
@@ -394,11 +390,13 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 type handleState struct {
 	h           *LayoutHandler
 	layoutAttrs layoutAttrs
-	buf         *buffer.Buffer
-	freeBuf     bool // should buf be freed?
-	bufStart    startSepState
-	prefix      *buffer.Buffer // key prefix
-	groups      *[]string      // pool-allocated slice of active groups, for ReplaceAttr
+	// layoutAttrsBuf is a pooled backing array for layoutAttrs, kept across reuses of handleState.
+	layoutAttrsBuf layoutAttrs
+	buf            *buffer.Buffer
+	freeBuf        bool // should buf be freed?
+	bufStart       startSepState
+	prefix         *buffer.Buffer // key prefix
+	groups         *[]string      // pool-allocated slice of active groups, for ReplaceAttr
 }
 
 func (s *handleState) appendNonBuiltIns(r Record) {
@@ -436,6 +434,7 @@ var handleStatePool = sync.Pool{New: func() any { //nolint:gochecknoglobals // s
 	return &handleState{}
 }}
 
+// newHandleState returns a pooled handleState which modifies layoutAttrs in place.
 func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buffer, freeBuf bool) *handleState {
 	s := handleStatePool.Get().(*handleState)
 	s.h = h
@@ -451,6 +450,16 @@ func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buff
 	return s
 }
 
+// newPrivateHandleState is like newHandleState,
+// but the state works on a private copy of layoutAttrs,
+// which is valid only until free.
+func (h *LayoutHandler) newPrivateHandleState(layoutAttrs layoutAttrs, buf *buffer.Buffer, freeBuf bool) *handleState {
+	s := h.newHandleState(layoutAttrs, buf, freeBuf)
+	s.layoutAttrsBuf = append(s.layoutAttrsBuf[:0], layoutAttrs...)
+	s.layoutAttrs = s.layoutAttrsBuf
+	return s
+}
+
 func (s *handleState) free() {
 	if s.freeBuf {
 		s.buf.Free()
@@ -460,7 +469,8 @@ func (s *handleState) free() {
 		groupPool.Put(gs)
 	}
 	s.prefix.Free()
-	*s = handleState{} // avoid retaining references
+	clear(s.layoutAttrsBuf)                                // avoid retaining attrs of this call
+	*s = handleState{layoutAttrsBuf: s.layoutAttrsBuf[:0]} // avoid retaining other references
 	handleStatePool.Put(s)
 }
 

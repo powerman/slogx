@@ -11,7 +11,7 @@ import (
 
 // Deferred functions run before the stack is unwound,
 // so slogx.Stack resolved inside a recover-defer shows the panic point.
-// The helper frame between the deferred closure and the log call appears above the panic.
+// The deferred closure and the logging helper it calls appear above the panic.
 func ExampleStack_panicRecovery() {
 	defer slog.SetDefault(slog.Default())
 

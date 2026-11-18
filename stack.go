@@ -70,7 +70,7 @@ type stackValue struct {
 // deferred functions run before the stack is unwound,
 // so the panic point is still on the stack when the log call made from a deferred function
 // resolves Stack, right below the standard "panic(...)" frame.
-// Only frames of helpers between the deferred function and the log call are shown above it.
+// Only the deferred function and the helpers it calls to log are shown above it.
 // This holds only while the log call is synchronous within the deferred function's goroutine.
 // If the record is logged from another goroutine or after the deferred function has returned,
 // capture the stack eagerly at the recover() point instead, using [ErrorStack].

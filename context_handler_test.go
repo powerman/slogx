@@ -183,6 +183,10 @@ func TestNewDefaultContextLogger(tt *testing.T) {
 	log.InfoContext(ctx, "Test", "a", 42)
 	t.Match(buf.String(), `level=INFO msg=Test k1=v1 k2=2 k3=true a=42\n$`)
 
+	buf.Reset()
+	log.InfoContext(context.TODO(), "Test", "a", 42) //nolint:usetesting // Check context.TODO() substitution.
+	t.Match(buf.String(), `level=INFO msg=Test k1=v1 k2=2 a=42\n$`)
+
 	t.Panic(func() { slogx.ContextWith(t.Context(), "k1", 1) })
 	t.Panic(func() { slogx.ContextWithAttrs(t.Context(), slogx.Stack) })
 	t.Panic(func() { slogx.ContextWithGroup(t.Context(), "g") })

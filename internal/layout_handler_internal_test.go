@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/powerman/check"
-
-	"github.com/powerman/slogx/internal/buffer"
 )
 
 // A slot buffer grown by a large attr must not be retained by the pool,
@@ -18,7 +16,7 @@ func TestHandleState_FreeDropsLargeSlotBufs(tt *testing.T) {
 	t := check.Must(tt)
 
 	h := NewLayoutHandler(io.Discard, &LayoutHandlerOptions{SuffixKeys: []string{"small", "large"}})
-	s := h.newPrivateHandleState(buffer.New(), true)
+	s := h.newPrivateHandleState()
 	s.appendAttr(String("small", "v"))
 	s.appendAttr(String("large", strings.Repeat("x", maxPooledBufSize)))
 	bufs := s.slotBufs

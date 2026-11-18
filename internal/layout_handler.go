@@ -156,10 +156,6 @@ func makeLayoutAttrs(opts *LayoutHandlerOptions) layoutAttrs {
 	return make([][]byte, len(opts.PrefixKeys)+len(opts.SuffixKeys))
 }
 
-func (la layoutAttrs) clone() layoutAttrs {
-	return slices.Clone(la)
-}
-
 func (la layoutAttrs) hasPrefix(opts *LayoutHandlerOptions) bool {
 	for i := range opts.PrefixKeys {
 		if len(la[i]) > 0 {
@@ -253,21 +249,15 @@ func dedupKeys(keys []string, seen map[string]bool) []string {
 	return uniq
 }
 
+// clone returns a copy of h which shares the mutex with h.
+// Slices are cloned or clipped, so modifying or appending to them does not modify h.
 func (h *LayoutHandler) clone() *LayoutHandler {
-	return &LayoutHandler{
-		opts:                   h.opts,
-		timeSlot:               h.timeSlot,
-		levelSlot:              h.levelSlot,
-		fastTime:               h.fastTime,
-		fastLevel:              h.fastLevel,
-		layoutAttrs:            h.layoutAttrs.clone(),
-		preformattedAttrs:      slices.Clip(h.preformattedAttrs),
-		preformattedAttrsStart: h.preformattedAttrsStart,
-		groups:                 slices.Clip(h.groups),
-		prefix:                 slices.Clip(h.prefix),
-		mu:                     h.mu, // mutex shared among all clones of this handler
-		w:                      h.w,
-	}
+	h2 := *h
+	h2.layoutAttrs = slices.Clone(h.layoutAttrs)
+	h2.preformattedAttrs = slices.Clip(h.preformattedAttrs)
+	h2.groups = slices.Clip(h.groups)
+	h2.prefix = slices.Clip(h.prefix)
+	return &h2
 }
 
 // Enabled reports whether l is greater than or equal to the
@@ -294,7 +284,6 @@ func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 	state.bufStart = h2.preformattedAttrsStart
 	state.prefix.Write(h2.prefix)
 	state.appendAttrs(as)
-	h2.layoutAttrs = state.layoutAttrs
 	h2.preformattedAttrsStart = state.bufStart
 	return h2
 }
@@ -317,7 +306,7 @@ func (h *LayoutHandler) WithGroup(name string) Handler {
 //nolint:funlen // Inherent to assembling time/level/source/message/prefix/suffix in one pass.
 func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// Built-in attrs may be written to layoutAttrs too, so Handle must not share it.
-	state := h.newPrivateHandleState(buffer.New(), true)
+	state := h.newPrivateHandleState()
 	defer state.free()
 	// Built-in attributes. They are not in a group.
 	stateGroups := state.groups
@@ -523,9 +512,9 @@ func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buff
 // but the state works on private empty layoutAttrs,
 // which are valid only until free.
 // Preformatted layoutAttrs of h are added by appendNonBuiltIns.
-func (h *LayoutHandler) newPrivateHandleState(buf *buffer.Buffer, freeBuf bool) *handleState {
+func (h *LayoutHandler) newPrivateHandleState() *handleState {
 	n := len(h.layoutAttrs)
-	s := h.newHandleState(nil, buf, freeBuf)
+	s := h.newHandleState(nil, buffer.New(), true)
 	s.layoutAttrsBuf = slices.Grow(s.layoutAttrsBuf[:0], n)[:n]
 	s.layoutAttrs = s.layoutAttrsBuf
 	s.private = true
@@ -652,16 +641,14 @@ func (s *handleState) appendAttr(a Attr) {
 }
 
 func (s *handleState) key(key string) string {
-	if s.prefix != nil && len(*s.prefix) > 0 {
+	if len(*s.prefix) > 0 {
 		return string(*s.prefix) + key
 	}
 	return key
 }
 
 func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
-	if format.Prefix != "" {
-		s.buf.WriteString(format.Prefix)
-	}
+	s.buf.WriteString(format.Prefix)
 
 	switch {
 	// Special case: short level for "%3.3s" format of LevelKey.
@@ -681,9 +668,7 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 		}
 	}
 
-	if format.Suffix != "" {
-		s.buf.WriteString(format.Suffix)
-	}
+	s.buf.WriteString(format.Suffix)
 
 	if s.bufStart == sepNone {
 		if format.Prefix != "" || format.MinWidth > 0 || format.MaxWidth != 0 || format.Suffix != "" {

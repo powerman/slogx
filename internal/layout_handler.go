@@ -197,6 +197,7 @@ type LayoutHandler struct {
 	levelSlot              int         // index of LevelKey in layoutAttrs, or -1
 	fastTime               bool        // TimeKey needs neither ReplaceAttr nor Format
 	fastLevel              bool        // LevelKey needs neither ReplaceAttr nor Format
+	fastMsg                bool        // MessageKey needs neither ReplaceAttr nor Format
 	layoutAttrs            layoutAttrs // preformatted prefix and suffix attrs
 	preformattedAttrs      []byte
 	preformattedAttrsStart startSepState
@@ -217,37 +218,39 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	// Remove duplicate keys in PrefixKeys and SuffixKeys,
 	// keeping the first occurrence of each key.
 	// If a key is present in both, it is kept in PrefixKeys.
-	prefixKeys := make([]string, 0, len(opts.PrefixKeys))
-	suffixKeys := make([]string, 0, len(opts.SuffixKeys))
 	seen := make(map[string]bool, len(opts.PrefixKeys)+len(opts.SuffixKeys)+1 /* for MessageKey */)
 	seen[MessageKey] = true // Ignore MessageKey in both.
-	for _, k := range opts.PrefixKeys {
-		if !seen[k] {
-			seen[k] = true
-			prefixKeys = append(prefixKeys, k)
-		}
-	}
-	for _, k := range opts.SuffixKeys {
-		if !seen[k] {
-			seen[k] = true
-			suffixKeys = append(suffixKeys, k)
-		}
-	}
-	opts.PrefixKeys = prefixKeys
-	opts.SuffixKeys = suffixKeys
+	opts.PrefixKeys = dedupKeys(opts.PrefixKeys, seen)
+	opts.SuffixKeys = dedupKeys(opts.SuffixKeys, seen)
 
-	_, timeFormat := opts.Format[TimeKey]
-	_, levelFormat := opts.Format[LevelKey]
+	fastFor := func(key string) bool {
+		_, ok := opts.Format[key]
+		return opts.ReplaceAttr == nil && !ok
+	}
 	return &LayoutHandler{
 		opts:        opts,
 		timeSlot:    layoutSlot(TimeKey, opts),
 		levelSlot:   layoutSlot(LevelKey, opts),
-		fastTime:    opts.ReplaceAttr == nil && !timeFormat,
-		fastLevel:   opts.ReplaceAttr == nil && !levelFormat,
+		fastTime:    fastFor(TimeKey),
+		fastLevel:   fastFor(LevelKey),
+		fastMsg:     fastFor(MessageKey),
 		layoutAttrs: makeLayoutAttrs(opts),
 		mu:          &sync.Mutex{},
 		w:           w,
 	}
+}
+
+// dedupKeys returns keys without the ones in seen, keeping the first occurrence of each key.
+// It adds each kept key to seen, so a later call drops keys kept by an earlier one.
+func dedupKeys(keys []string, seen map[string]bool) []string {
+	uniq := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if !seen[k] {
+			seen[k] = true
+			uniq = append(uniq, k)
+		}
+	}
+	return uniq
 }
 
 func (h *LayoutHandler) clone() *LayoutHandler {
@@ -311,7 +314,7 @@ func (h *LayoutHandler) WithGroup(name string) Handler {
 // Handle is the internal implementation of Handler.Handle
 // used by TextHandler and LayoutHandler.
 //
-//nolint:funlen,gocognit // Inherent to assembling time/level/source/message/prefix/suffix in one pass.
+//nolint:funlen // Inherent to assembling time/level/source/message/prefix/suffix in one pass.
 func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// Built-in attrs may be written to layoutAttrs too, so Handle must not share it.
 	state := h.newPrivateHandleState(buffer.New(), true)
@@ -319,7 +322,6 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// Built-in attributes. They are not in a group.
 	stateGroups := state.groups
 	state.groups = nil // So ReplaceAttrs sees no groups instead of the pre groups.
-	rep := h.opts.ReplaceAttr
 	// time
 	if !r.Time.IsZero() {
 		key := TimeKey
@@ -360,7 +362,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// message
 	key = MessageKey
 	msg := r.Message
-	if _, ok := h.opts.Format[key]; rep == nil && !ok {
+	if h.fastMsg {
 		state.appendKey(key)
 		state.appendString(msg, noFormat)
 	} else {
@@ -371,21 +373,12 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	state.appendNonBuiltIns(r)
 
 	buf := state.buf
-	//nolint:nestif // Inserting prefix attrs before the message requires this branching.
 	if state.layoutAttrs.hasPrefix(h.opts) {
 		buf = buffer.New()
 		defer buf.Free()
 		// Insert prefix attrs before the message.
 		buf.Write((*state.buf)[:messagePos])
-		for i, k := range h.opts.PrefixKeys {
-			a := state.layoutAttrs[i]
-			if len(a) > 0 {
-				if _, ok := h.opts.Format[k]; buf.Len() > 0 && !ok {
-					buf.WriteByte(attrSep)
-				}
-				buf.Write(a)
-			}
-		}
+		writeLayoutAttrs(buf, h.opts, h.opts.PrefixKeys, state.layoutAttrs)
 		// Write the message and the rest of non-suffix attrs.
 		if buf.Len() > 0 && state.bufStart == sepSkipped {
 			buf.WriteByte(attrSep)
@@ -393,16 +386,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 		buf.Write((*state.buf)[messagePos:])
 	}
 	// Append suffix attrs after all other attrs.
-	offset := len(h.opts.PrefixKeys)
-	for i, k := range h.opts.SuffixKeys {
-		a := state.layoutAttrs[offset+i]
-		if len(a) > 0 {
-			if _, ok := h.opts.Format[k]; buf.Len() > 0 && !ok {
-				buf.WriteByte(attrSep)
-			}
-			buf.Write(a)
-		}
-	}
+	writeLayoutAttrs(buf, h.opts, h.opts.SuffixKeys, state.layoutAttrs[len(h.opts.PrefixKeys):])
 	buf.WriteByte('\n')
 
 	h.mu.Lock()
@@ -464,6 +448,18 @@ func (s *handleState) endLayout(i int, orig origBuf) {
 	}
 	s.buf = orig.buf
 	s.bufStart = orig.bufStart
+}
+
+// writeLayoutAttrs writes non-empty attrs (preformatted values of keys) to buf.
+func writeLayoutAttrs(buf *buffer.Buffer, opts *LayoutHandlerOptions, keys []string, attrs layoutAttrs) {
+	for i, k := range keys {
+		if a := attrs[i]; len(a) > 0 {
+			if _, ok := opts.Format[k]; buf.Len() > 0 && !ok {
+				buf.WriteByte(attrSep)
+			}
+			buf.Write(a)
+		}
+	}
 }
 
 func (s *handleState) appendNonBuiltIns(r Record) {

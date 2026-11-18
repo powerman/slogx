@@ -119,7 +119,9 @@ type LayoutHandlerOptions struct {
 	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
-	// If multiple attributes have the same key only the last one is output.
+	// If multiple attributes have the same key, including built-in ones,
+	// only the last one is output (unlike slog.TextHandler, which outputs all of them):
+	// a record attribute wins over one added by With, which wins over a built-in one.
 	// If slog.MessageKey is present in PrefixKeys, it is ignored.
 	// If same key is present multiple times in PrefixKeys, all but the first are ignored.
 	// If same key is present in both PrefixKeys and SuffixKeys, it is output as a prefix.
@@ -133,7 +135,9 @@ type LayoutHandlerOptions struct {
 	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
-	// If multiple attributes have the same key only the last one is output.
+	// If multiple attributes have the same key, including built-in ones,
+	// only the last one is output (unlike slog.TextHandler, which outputs all of them):
+	// a record attribute wins over one added by With, which wins over a built-in one.
 	// If slog.MessageKey is present in SuffixKeys, it is ignored.
 	// If same key is present multiple times in SuffixKeys, all but the first are ignored.
 	// If same key is present in both PrefixKeys and SuffixKeys, it is output as a prefix.
@@ -299,7 +303,7 @@ func (h *LayoutHandler) WithGroup(name string) Handler {
 //nolint:funlen,gocognit // Inherent to assembling time/level/source/message/prefix/suffix in one pass.
 func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// Built-in attrs may be written to layoutAttrs too, so Handle must not share it.
-	state := h.newPrivateHandleState(h.layoutAttrs, buffer.New(), true)
+	state := h.newPrivateHandleState(buffer.New(), true)
 	defer state.free()
 	// Built-in attributes. They are not in a group.
 	stateGroups := state.groups
@@ -419,6 +423,12 @@ func (s *handleState) appendNonBuiltIns(r Record) {
 		}
 		s.buf.Write(pfa)
 	}
+	// Preformatted attrs with layout keys follow (and thus replace) built-in attrs.
+	for i, a := range s.h.layoutAttrs {
+		if a != nil {
+			s.layoutAttrs[i] = a
+		}
+	}
 	// Attrs in Record -- unlike the built-in ones, they are in groups started
 	// from WithGroup.
 	// If the record has no Attrs, don't output any groups.
@@ -457,11 +467,13 @@ func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buff
 }
 
 // newPrivateHandleState is like newHandleState,
-// but the state works on a private copy of layoutAttrs,
-// which is valid only until free.
-func (h *LayoutHandler) newPrivateHandleState(layoutAttrs layoutAttrs, buf *buffer.Buffer, freeBuf bool) *handleState {
-	s := h.newHandleState(layoutAttrs, buf, freeBuf)
-	s.layoutAttrsBuf = append(s.layoutAttrsBuf[:0], layoutAttrs...)
+// but the state works on private empty layoutAttrs,
+// which are valid only until free.
+// Preformatted layoutAttrs of h are added by appendNonBuiltIns.
+func (h *LayoutHandler) newPrivateHandleState(buf *buffer.Buffer, freeBuf bool) *handleState {
+	n := len(h.layoutAttrs)
+	s := h.newHandleState(nil, buf, freeBuf)
+	s.layoutAttrsBuf = slices.Grow(s.layoutAttrsBuf[:0], n)[:n]
 	s.layoutAttrs = s.layoutAttrsBuf
 	return s
 }

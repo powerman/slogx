@@ -3,9 +3,10 @@ Package slogx contains extensions for [log/slog].
 
 # Handlers
 
-  - [LayoutHandler] is a drop-in replacement for [slog.TextHandler]
+  - [LayoutHandler] is an alternative to [slog.TextHandler]
     with configurable key formatting and ordering,
     designed for compact and easy to read output.
+    It is a drop-in replacement for [slog.TextHandler] unless key ordering is configured.
     See [LayoutHandlerOptions] for details and examples.
   - [NewContextHandler] creates a handler that delegates to another handler stored in a context.
     This allows to add attributes and groups into context

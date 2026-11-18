@@ -154,7 +154,9 @@ type LayoutHandlerOptions struct {
 	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
-	// If multiple attributes have the same key only the last one is output.
+	// If multiple attributes have the same key, including built-in ones,
+	// only the last one is output (unlike slog.TextHandler, which outputs all of them):
+	// a record attribute wins over one added by With, which wins over a built-in one.
 	// If slog.MessageKey is present in PrefixKeys, it is ignored.
 	// If same key is present multiple times in PrefixKeys, all but the first are ignored.
 	// If same key is present in both PrefixKeys and SuffixKeys, it is output as a prefix.
@@ -168,7 +170,9 @@ type LayoutHandlerOptions struct {
 	//
 	// Key should be the full key, including group prefixes separated by '.'.
 	//
-	// If multiple attributes have the same key only the last one is output.
+	// If multiple attributes have the same key, including built-in ones,
+	// only the last one is output (unlike slog.TextHandler, which outputs all of them):
+	// a record attribute wins over one added by With, which wins over a built-in one.
 	// If slog.MessageKey is present in SuffixKeys, it is ignored.
 	// If same key is present multiple times in SuffixKeys, all but the first are ignored.
 	// If same key is present in both PrefixKeys and SuffixKeys, it is output as a prefix.
@@ -182,9 +186,10 @@ type LayoutHandlerOptions struct {
 // that writes [slog.Record] to an [io.Writer] in a text format
 // designed for compact and easy to read output.
 //
-// It is a drop-in replacement for [slog.TextHandler] and implemented using modified
-// [slog.TextHandler] code, so it has exactly same behaviour and similar performance
-// when not using any of the extra options.
+// It is a drop-in replacement for [slog.TextHandler] while PrefixKeys and SuffixKeys are not used:
+// for keys listed there it outputs only the last attribute with the key, including built-in ones.
+// It is implemented using modified [slog.TextHandler] code,
+// so it has exactly same output and similar performance when not using any of the extra options.
 //
 // To get improved output you should define order and formatting for some of the attributes
 // you use in your application (see [LayoutHandlerOptions] for details and examples).

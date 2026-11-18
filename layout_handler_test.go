@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"maps"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -786,6 +787,155 @@ func TestLayoutHandler_BuiltInLayoutKeyNotShared(tt *testing.T) {
 	noTime := slog.NewRecord(time.Time{}, slog.LevelInfo, "second", 0)
 	t.Nil(h.Handle(ctx, noTime))
 	t.Equal(buf.String(), " INFO msg=second\n")
+}
+
+// Layout position depends only on the key,
+// so built-in attrs and other attrs with the same key are handled the same way:
+// the output must match the output of slog.TextHandler
+// with the last attr of each layout key moved to its position.
+func TestLayoutHandler_BuiltInLayoutKeysMatchTextHandler(tt *testing.T) {
+	tt.Parallel()
+
+	var pcs [1]uintptr
+	runtime.Callers(1, pcs[:])
+	ts := time.Date(2006, time.January, 2, 15, 4, 5, 789000000, time.UTC)
+
+	layouts := []struct {
+		prefixKeys []string
+		suffixKeys []string
+	}{
+		{[]string{slog.TimeKey, slog.LevelKey, slog.SourceKey}, nil},
+		{nil, []string{slog.LevelKey, slog.SourceKey, slog.TimeKey}},
+		{[]string{slog.LevelKey}, []string{slog.TimeKey, slog.SourceKey}},
+	}
+	records := []struct {
+		name string
+		time time.Time
+		with []slog.Attr
+		args []any
+	}{
+		{"no attrs", ts, nil, nil},
+		{"zero time", time.Time{}, []slog.Attr{slog.String("time", "WITH")}, []any{"time", "REC"}},
+		{"With", ts, []slog.Attr{slog.String("level", "WITH"), slog.String("time", "WITH")}, nil},
+		{"record", ts, nil, []any{"time", "REC", "level", "REC", "source", "REC"}},
+		{
+			"With and record",
+			ts,
+			[]slog.Attr{slog.String("level", "WITH"), slog.String("source", "WITH")},
+			[]any{"level", "REC", "time", "REC"},
+		},
+	}
+	for _, layout := range layouts {
+		for _, addSource := range []bool{false, true} {
+			for _, replace := range []bool{false, true} {
+				for _, rec := range records {
+					name := fmt.Sprintf("%v %v source=%v replace=%v %s",
+						layout.prefixKeys, layout.suffixKeys, addSource, replace, rec.name)
+					tt.Run(name, func(tt *testing.T) {
+						tt.Parallel()
+						t := check.Must(tt)
+
+						var replaceAttr func([]string, slog.Attr) slog.Attr
+						if replace { // Disables the fast path for built-in attrs.
+							replaceAttr = func(_ []string, a slog.Attr) slog.Attr { return a }
+						}
+						var textBuf, layoutBuf bytes.Buffer
+						textHandler := slog.NewTextHandler(&textBuf, &slog.HandlerOptions{
+							AddSource:   addSource,
+							ReplaceAttr: replaceAttr,
+						})
+						layoutHandler := slogx.NewLayoutHandler(&layoutBuf, &slogx.LayoutHandlerOptions{
+							AddSource:   addSource,
+							ReplaceAttr: replaceAttr,
+							PrefixKeys:  layout.prefixKeys,
+							SuffixKeys:  layout.suffixKeys,
+						})
+						r := slog.NewRecord(rec.time, slog.LevelInfo, "msg", pcs[0])
+						r.Add(rec.args...)
+						for _, h := range []slog.Handler{textHandler, layoutHandler} {
+							t.Nil(h.WithAttrs(rec.with).Handle(tt.Context(), r))
+							t.Nil(h.WithGroup("g").WithAttrs(rec.with).Handle(tt.Context(), r))
+						}
+
+						want := applyLayout(textBuf.String(), layout.prefixKeys, layout.suffixKeys)
+						t.Equal(layoutBuf.String(), want)
+					})
+				}
+			}
+		}
+	}
+}
+
+// applyLayout moves the last attr of each of prefixKeys and suffixKeys
+// in output of slog.TextHandler to its layout position and removes other attrs with these keys.
+// It expects attr values without spaces.
+func applyLayout(output string, prefixKeys, suffixKeys []string) string {
+	var want strings.Builder
+	for line := range strings.Lines(output) {
+		last := make(map[string]string)
+		var attrs []string
+		for attr := range strings.SplitSeq(strings.TrimSuffix(line, "\n"), " ") {
+			key, _, _ := strings.Cut(attr, "=")
+			if slices.Contains(prefixKeys, key) || slices.Contains(suffixKeys, key) {
+				last[key] = attr
+			} else {
+				attrs = append(attrs, attr)
+			}
+		}
+		var prefix, suffix []string
+		for _, k := range prefixKeys {
+			if attr, ok := last[k]; ok {
+				prefix = append(prefix, attr)
+			}
+		}
+		for _, k := range suffixKeys {
+			if attr, ok := last[k]; ok {
+				suffix = append(suffix, attr)
+			}
+		}
+		want.WriteString(strings.Join(slices.Concat(prefix, attrs, suffix), " ") + "\n")
+	}
+	return want.String()
+}
+
+// Format and layout position depend only on the key,
+// so they apply the same way to built-in attrs and other attrs with the same key.
+// Only the last attr with a layout key is output, but all attrs with other keys are output.
+func TestLayoutHandler_BuiltInKeyFormat(tt *testing.T) {
+	tt.Parallel()
+
+	tests := []struct {
+		name       string
+		format     string
+		prefixKeys []string
+		suffixKeys []string
+		with       string
+		args       []any
+		want       string
+	}{
+		{"no layout", "[%v]", nil, nil, "WITH", []any{"level", "REC"}, "[INFO] msg=msg[WITH][REC]\n"},
+		{"prefix With", "[%v]", []string{slog.LevelKey}, nil, "WITH", nil, "[WITH] msg=msg\n"},
+		{"prefix record", "[%v]", []string{slog.LevelKey}, nil, "WITH", []any{"level", "REC"}, "[REC] msg=msg\n"},
+		{"suffix With", "[%v]", nil, []string{slog.LevelKey}, "WITH", nil, "msg=msg[WITH]\n"},
+		{"suffix record", "[%v]", nil, []string{slog.LevelKey}, "WITH", []any{"level", "REC"}, "msg=msg[REC]\n"},
+		{"suffix empty With", "%s", nil, []string{slog.LevelKey}, "", nil, "msg=msg\n"},
+		{"suffix empty record", "%s", nil, []string{slog.LevelKey}, "WITH", []any{"level", ""}, "msg=msg\n"},
+	}
+	for _, tc := range tests {
+		tt.Run(tc.name, func(tt *testing.T) {
+			tt.Parallel()
+			t := check.Must(tt)
+
+			var buf bytes.Buffer
+			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+				Format:     map[string]string{slog.TimeKey: "", slog.LevelKey: tc.format},
+				PrefixKeys: tc.prefixKeys,
+				SuffixKeys: tc.suffixKeys,
+			}))
+			logger.With("level", tc.with).Info("msg", tc.args...)
+			t.Equal(buf.String(), tc.want)
+		})
+	}
 }
 
 func TestLayoutHandler_BuiltInLayoutKeyRecordTimeFormat(tt *testing.T) {

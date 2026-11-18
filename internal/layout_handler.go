@@ -166,17 +166,17 @@ func (la layoutAttrs) hasPrefix(opts *LayoutHandlerOptions) bool {
 	return false
 }
 
-func (la layoutAttrs) buffer(key string, opts *LayoutHandlerOptions) *buffer.Buffer {
+// layoutSlot returns the index of key in layoutAttrs, or -1 if key is not a layout key.
+func layoutSlot(key string, opts *LayoutHandlerOptions) int {
 	i := slices.Index(opts.PrefixKeys, key)
 	if i < 0 {
 		i = slices.Index(opts.SuffixKeys, key)
 		if i < 0 {
-			return nil
+			return -1
 		}
 		i += len(opts.PrefixKeys)
 	}
-	la[i] = make([]byte, 0, layoutAttrBufPrealloc) // replace old value, preallocate some space
-	return (*buffer.Buffer)(&la[i])
+	return i
 }
 
 type startSepState int
@@ -190,8 +190,10 @@ const (
 // LayoutHandler is a handler created by [NewLayoutHandler].
 type LayoutHandler struct {
 	opts                   *LayoutHandlerOptions
-	timeInLayout           bool        // is TimeKey in PrefixKeys or SuffixKeys?
-	levelInLayout          bool        // is LevelKey in PrefixKeys or SuffixKeys?
+	timeSlot               int         // index of TimeKey in layoutAttrs, or -1
+	levelSlot              int         // index of LevelKey in layoutAttrs, or -1
+	fastTime               bool        // TimeKey needs neither ReplaceAttr nor Format
+	fastLevel              bool        // LevelKey needs neither ReplaceAttr nor Format
 	layoutAttrs            layoutAttrs // preformatted prefix and suffix attrs
 	preformattedAttrs      []byte
 	preformattedAttrsStart startSepState
@@ -231,21 +233,27 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	opts.PrefixKeys = prefixKeys
 	opts.SuffixKeys = suffixKeys
 
+	_, timeFormat := opts.Format[TimeKey]
+	_, levelFormat := opts.Format[LevelKey]
 	return &LayoutHandler{
-		opts:          opts,
-		timeInLayout:  seen[TimeKey],
-		levelInLayout: seen[LevelKey],
-		layoutAttrs:   makeLayoutAttrs(opts),
-		mu:            &sync.Mutex{},
-		w:             w,
+		opts:        opts,
+		timeSlot:    layoutSlot(TimeKey, opts),
+		levelSlot:   layoutSlot(LevelKey, opts),
+		fastTime:    opts.ReplaceAttr == nil && !timeFormat,
+		fastLevel:   opts.ReplaceAttr == nil && !levelFormat,
+		layoutAttrs: makeLayoutAttrs(opts),
+		mu:          &sync.Mutex{},
+		w:           w,
 	}
 }
 
 func (h *LayoutHandler) clone() *LayoutHandler {
 	return &LayoutHandler{
 		opts:                   h.opts,
-		timeInLayout:           h.timeInLayout,
-		levelInLayout:          h.levelInLayout,
+		timeSlot:               h.timeSlot,
+		levelSlot:              h.levelSlot,
+		fastTime:               h.fastTime,
+		fastLevel:              h.fastLevel,
 		layoutAttrs:            h.layoutAttrs.clone(),
 		preformattedAttrs:      slices.Clip(h.preformattedAttrs),
 		preformattedAttrsStart: h.preformattedAttrsStart,
@@ -313,9 +321,11 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	if !r.Time.IsZero() {
 		key := TimeKey
 		val := r.Time.Round(0) // strip monotonic to match Attr behavior
-		if _, ok := h.opts.Format[key]; rep == nil && !ok && !h.timeInLayout {
+		if h.fastTime {
+			orig := state.beginLayout(h.timeSlot)
 			state.appendKey(key)
 			state.appendTime(key, val)
+			state.endLayout(h.timeSlot, orig)
 		} else {
 			state.appendAttr(Time(key, val))
 		}
@@ -323,9 +333,11 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// level
 	key := LevelKey
 	val := r.Level
-	if _, ok := h.opts.Format[key]; rep == nil && !ok && !h.levelInLayout {
+	if h.fastLevel {
+		orig := state.beginLayout(h.levelSlot)
 		state.appendKey(key)
 		state.appendString(val.String(), noFormat)
+		state.endLayout(h.levelSlot, orig)
 	} else {
 		state.appendAttr(Any(key, val))
 	}
@@ -402,11 +414,51 @@ type handleState struct {
 	layoutAttrs layoutAttrs
 	// layoutAttrsBuf is a pooled backing array for layoutAttrs, kept across reuses of handleState.
 	layoutAttrsBuf layoutAttrs
-	buf            *buffer.Buffer
-	freeBuf        bool // should buf be freed?
-	bufStart       startSepState
-	prefix         *buffer.Buffer // key prefix
-	groups         *[]string      // pool-allocated slice of active groups, for ReplaceAttr
+	// slotBufs are pooled buffers for layoutAttrs values written by a private handleState,
+	// kept across reuses of handleState.
+	slotBufs [][]byte
+	private  bool // are layoutAttrs private (see newPrivateHandleState)?
+	buf      *buffer.Buffer
+	freeBuf  bool // should buf be freed?
+	bufStart startSepState
+	prefix   *buffer.Buffer // key prefix
+	groups   *[]string      // pool-allocated slice of active groups, for ReplaceAttr
+}
+
+type origBuf struct {
+	buf      *buffer.Buffer
+	bufStart startSepState
+}
+
+// beginLayout redirects output to layoutAttrs[i], replacing its previous value.
+// Negative i means no redirection.
+// The returned value must be passed to endLayout.
+func (s *handleState) beginLayout(i int) origBuf {
+	orig := origBuf{buf: s.buf, bufStart: s.bufStart}
+	switch {
+	case i < 0:
+	case s.private:
+		s.slotBufs[i] = s.slotBufs[i][:0]
+		s.buf = (*buffer.Buffer)(&s.slotBufs[i])
+	default:
+		// The old value may be shared with other handlers, so it must not be reused.
+		s.layoutAttrs[i] = make([]byte, 0, layoutAttrBufPrealloc)
+		s.buf = (*buffer.Buffer)(&s.layoutAttrs[i])
+	}
+	return orig
+}
+
+// endLayout restores output redirected by beginLayout,
+// keeping the original bufStart state.
+func (s *handleState) endLayout(i int, orig origBuf) {
+	if i < 0 {
+		return
+	}
+	if s.private {
+		s.layoutAttrs[i] = s.slotBufs[i]
+	}
+	s.buf = orig.buf
+	s.bufStart = orig.bufStart
 }
 
 func (s *handleState) appendNonBuiltIns(r Record) {
@@ -475,6 +527,10 @@ func (h *LayoutHandler) newPrivateHandleState(buf *buffer.Buffer, freeBuf bool) 
 	s := h.newHandleState(nil, buf, freeBuf)
 	s.layoutAttrsBuf = slices.Grow(s.layoutAttrsBuf[:0], n)[:n]
 	s.layoutAttrs = s.layoutAttrsBuf
+	s.private = true
+	if n > len(s.slotBufs) {
+		s.slotBufs = append(s.slotBufs, make([][]byte, n-len(s.slotBufs))...)
+	}
 	return s
 }
 
@@ -487,8 +543,11 @@ func (s *handleState) free() {
 		groupPool.Put(gs)
 	}
 	s.prefix.Free()
-	clear(s.layoutAttrsBuf)                                // avoid retaining attrs of this call
-	*s = handleState{layoutAttrsBuf: s.layoutAttrsBuf[:0]} // avoid retaining other references
+	clear(s.layoutAttrsBuf) // avoid retaining attrs of this call
+	*s = handleState{       // avoid retaining other references
+		layoutAttrsBuf: s.layoutAttrsBuf[:0],
+		slotBufs:       s.slotBufs,
+	}
 	handleStatePool.Put(s)
 }
 
@@ -569,13 +628,8 @@ func (s *handleState) appendAttr(a Attr) {
 		key := s.key(a.Key)
 
 		// Redirect output to layoutAttrs if needed.
-		// Keep the original bufStart state when output is redirected.
-		layoutBuf := s.layoutAttrs.buffer(key, s.h.opts)
-		origBuf := s.buf
-		origBufStart := s.bufStart
-		if layoutBuf != nil {
-			s.buf = layoutBuf
-		}
+		slot := layoutSlot(key, s.h.opts)
+		orig := s.beginLayout(slot)
 
 		if format, ok := s.h.opts.Format[key]; ok {
 			s.appendFormat(format, key, a.Value)
@@ -584,10 +638,7 @@ func (s *handleState) appendAttr(a Attr) {
 			s.appendValue(key, a.Value, noFormat)
 		}
 
-		if layoutBuf != nil {
-			s.buf = origBuf
-			s.bufStart = origBufStart
-		}
+		s.endLayout(slot, orig)
 	}
 }
 

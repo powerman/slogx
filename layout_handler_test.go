@@ -18,6 +18,7 @@ import (
 	"github.com/powerman/check"
 
 	"github.com/powerman/slogx"
+	"github.com/powerman/slogx/internal/race"
 )
 
 func TestLayoutHandler(tt *testing.T) {
@@ -961,6 +962,29 @@ func TestLayoutHandler_BuiltInLayoutKeyRecordTimeFormat(tt *testing.T) {
 			t.Equal(buf.String(), "level=INFO msg=msg time=2006-01-02\n")
 		})
 	}
+}
+
+// Moving built-in attrs (fast path), With attrs and record attrs to layout positions
+// must not allocate.
+//
+//nolint:paralleltest // testing.AllocsPerRun panics in parallel tests.
+func TestLayoutHandler_LayoutAllocs(tt *testing.T) {
+	if race.Enabled {
+		tt.Skip("sync.Pool drops items randomly under -race")
+	}
+	t := check.Must(tt)
+
+	h := slogx.NewLayoutHandler(io.Discard, &slogx.LayoutHandlerOptions{
+		PrefixKeys: []string{"a", "b"},
+		SuffixKeys: []string{slog.LevelKey, slog.TimeKey},
+	}).WithAttrs([]slog.Attr{slog.Int("b", 2)})
+	ctx := tt.Context()
+	r := slog.NewRecord(time.Now(), slog.LevelDebug, "msg", 0)
+	r.AddAttrs(slog.Int("a", 1))
+	allocs := testing.AllocsPerRun(100, func() {
+		_ = h.Handle(ctx, r)
+	})
+	t.Zero(allocs)
 }
 
 func TestLayoutHandler_ConcurrentHandle(tt *testing.T) {

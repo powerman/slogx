@@ -200,7 +200,7 @@ type LayoutHandler struct {
 // NewLayoutHandler creates a new [LayoutHandler] that writes to w, using the given options.
 //
 // Panics if opts.Format contains an invalid format.
-func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) slog.Handler {
+func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	if opts == nil {
 		opts = &LayoutHandlerOptions{}
 	}
@@ -226,12 +226,20 @@ func (h *LayoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
 
 // WithAttrs implements [slog.Handler] interface.
 func (h *LayoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &LayoutHandler{next: h.next.WithAttrs(attrs)}
+	next := h.next.WithAttrs(attrs)
+	if next == h.next {
+		return h
+	}
+	return &LayoutHandler{next: next}
 }
 
 // WithGroup implements [slog.Handler] interface.
 func (h *LayoutHandler) WithGroup(name string) slog.Handler {
-	return &LayoutHandler{next: h.next.WithGroup(name)}
+	next := h.next.WithGroup(name)
+	if next == h.next {
+		return h
+	}
+	return &LayoutHandler{next: next}
 }
 
 // Handle implements [slog.Handler] interface.

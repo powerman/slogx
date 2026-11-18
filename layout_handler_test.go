@@ -29,6 +29,16 @@ func TestLayoutHandler(tt *testing.T) {
 	t.Nil(slogtest.TestHandler(h, makeTextResults(t, &buf)))
 }
 
+func TestLayoutHandler_WithEmpty(tt *testing.T) {
+	tt.Parallel()
+	t := check.Must(tt)
+	h := slogx.NewLayoutHandler(io.Discard, nil)
+	t.True(h.WithAttrs(nil) == slog.Handler(h))
+	t.True(h.WithAttrs([]slog.Attr{slog.Group("g")}) == slog.Handler(h))
+	t.True(h.WithGroup("") == slog.Handler(h))
+	t.True(h.WithGroup("g") != slog.Handler(h))
+}
+
 //nolint:paralleltest // Subtests share buf and must run sequentially.
 func TestLayoutHandler_StdOptions(t *testing.T) {
 	var buf bytes.Buffer

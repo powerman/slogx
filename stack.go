@@ -66,10 +66,26 @@ type stackValue struct {
 //
 // It excludes stack frames up to and including the last log/slog call from the stack trace.
 //
+// Stack is also suitable for logging a recovered panic:
+// deferred functions run before the stack is unwound,
+// so the panic point is still on the stack when the log call made from a deferred function
+// resolves Stack, right below the standard "panic(...)" frame.
+// Only frames of helpers between the deferred function and the log call are shown above it.
+// This holds only while the log call is synchronous within the deferred function's goroutine.
+// If the record is logged from another goroutine or after the deferred function has returned,
+// capture the stack eagerly at the recover() point instead, using [ErrorStack].
+//
 // Example usage:
 //
 //	// Will format the stack trace only if Debug log level is enabled.
 //	slog.Debug("something", slogx.Stack)
+//
+//	// Will include the panic point in the stack trace.
+//	defer func() {
+//		if p := recover(); p != nil {
+//			slog.Error("panic", "err", p, slogx.Stack)
+//		}
+//	}()
 var Stack = StackSkip(0) // Const.
 
 // StackSkip returns an attribute that resolves to a stack trace formatted as panic output.

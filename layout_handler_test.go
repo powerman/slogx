@@ -485,6 +485,42 @@ func TestLayoutHandler_Format(t *testing.T) {
 	}
 }
 
+// Each byte of invalid UTF-8 counts as one rune for width and truncation.
+// Not part of TestLayoutHandler_Format because a regexp can't contain invalid UTF-8.
+func TestLayoutHandler_FormatInvalidUTF8(t *testing.T) {
+	t.Parallel()
+	const value = "a\xffb\xe4\xb8c\xf0\x9f\x98"
+	tests := []struct {
+		format string
+		want   string
+	}{
+		{"%.-3s", "…\x9f\x98"},
+		{"%.-5s", "…c\xf0\x9f\x98"},
+		{"%.3s", "a\xff…"},
+		{"%.5s", "a\xffb\xe4…"},
+		{"%-9.-5s", "…c\xf0\x9f\x98    "},
+		{"%.-6v", `"…x98"`},
+		{"%.6v", `"a\x…"`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.format, func(tt *testing.T) {
+			tt.Parallel()
+			t := check.Must(tt)
+			var buf bytes.Buffer
+			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+				Format: map[string]string{
+					slog.TimeKey:    "",
+					slog.LevelKey:   "",
+					slog.MessageKey: "",
+					"value":         tc.format,
+				},
+			}))
+			logger.Info("test", "value", value)
+			t.Equal(buf.String(), tc.want+"\n")
+		})
+	}
+}
+
 //nolint:paralleltest // Subtests share buf and must run sequentially.
 func TestLayoutHandler_FormatSpecial(t *testing.T) {
 	var buf bytes.Buffer

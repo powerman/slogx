@@ -278,10 +278,10 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 }
 
 // clone returns a copy of h which shares the mutex with h.
-// Slices are cloned or clipped, so modifying or appending to them does not modify h.
+// Slices are clipped, so appending to them does not modify h.
+// The layoutAttrs are shared: only WithAttrs modifies them, and it clones them first.
 func (h *LayoutHandler) clone() *LayoutHandler {
 	h2 := *h
-	h2.layoutAttrs = slices.Clone(h.layoutAttrs)
 	h2.preformattedAttrs = slices.Clip(h.preformattedAttrs)
 	h2.groups = slices.Clip(h.groups)
 	h2.prefix = slices.Clip(h.prefix)
@@ -306,6 +306,7 @@ func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 		return h
 	}
 	h2 := h.clone()
+	h2.layoutAttrs = slices.Clone(h.layoutAttrs)
 	// Pre-format the attributes as an optimization.
 	state := h2.newHandleState(h2.layoutAttrs, (*buffer.Buffer)(&h2.preformattedAttrs), false)
 	defer state.free()

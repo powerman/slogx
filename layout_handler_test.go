@@ -1326,6 +1326,48 @@ func TestLayoutHandler_AttrSep(t *testing.T) {
 	}
 }
 
+func TestLayoutHandler_AttrSepAfterFormat(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		format     map[string]string
+		prefixKeys []string
+		msg        string
+		a          string
+		want       string
+	}{
+		{map[string]string{"a": "%s"}, nil, "hi", "", "level=INFO msg=hi b=1\n"},
+		{map[string]string{"a": "%v"}, nil, "hi", "", "level=INFO msg=hi\"\" b=1\n"},
+		{map[string]string{"a": "%3s"}, nil, "hi", "", "level=INFO msg=hi    b=1\n"},
+		{map[string]string{"a": " %s"}, nil, "hi", "", "level=INFO msg=hi  b=1\n"},
+		{map[string]string{"a": "%s"}, nil, "hi", "x", "level=INFO msg=hix b=1\n"},
+		{map[string]string{"a": "%s", slog.LevelKey: "", slog.MessageKey: ""}, nil, "", "", "b=1\n"},
+		// Prefix attrs are inserted before the message, which has empty Format output here.
+		{map[string]string{slog.LevelKey: "", slog.MessageKey: "%s"}, []string{"a"}, "", "x", "a=x b=1\n"},
+	}
+	for _, tc := range tests {
+		t.Run(fmt.Sprintf("%v %q", tc.format, tc.a), func(tt *testing.T) {
+			tt.Parallel()
+			t := check.Must(tt)
+			var buf bytes.Buffer
+			logger := slog.New(slogx.NewLayoutHandler(&buf, &slogx.LayoutHandlerOptions{
+				ReplaceAttr: removeTime,
+				Format:      tc.format,
+				PrefixKeys:  tc.prefixKeys,
+			}))
+
+			logger.With("a", tc.a, "b", 1).Info(tc.msg)
+			t.Equal(buf.String(), tc.want, "With(a, b).Info()")
+			buf.Reset()
+			logger.Info(tc.msg, "a", tc.a, "b", 1)
+			t.Equal(buf.String(), tc.want, "Info(a, b)")
+			buf.Reset()
+			logger.With("a", tc.a).Info(tc.msg, "b", 1)
+			t.Equal(buf.String(), tc.want, "With(a).Info(b)")
+		})
+	}
+}
+
 func optsFormatToReplaceAttr(opts slogx.LayoutHandlerOptions) slogx.LayoutHandlerOptions {
 	excludedKeys := []string{}
 	format := make(map[string]string)

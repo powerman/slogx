@@ -189,7 +189,7 @@ type startSepState int
 const (
 	sepNone     startSepState = iota // no attrs yet
 	sepSkipped                       // first attr has no Format (output without required attrSep)
-	sepIncluded                      // first attr has attrSep or Format (does not need attrSep)
+	sepIncluded                      // starts with attrSep or non-empty Format output (needs no attrSep)
 )
 
 // LayoutHandler is a handler created by [NewLayoutHandler].
@@ -648,6 +648,7 @@ func (s *handleState) key(key string) string {
 }
 
 func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
+	start := s.buf.Len()
 	s.buf.WriteString(format.Prefix)
 
 	switch {
@@ -670,10 +671,8 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 
 	s.buf.WriteString(format.Suffix)
 
-	if s.bufStart == sepNone {
-		if format.Prefix != "" || format.MinWidth > 0 || format.MaxWidth != 0 || format.Suffix != "" {
-			s.bufStart = sepIncluded
-		}
+	if s.bufStart == sepNone && s.buf.Len() > start {
+		s.bufStart = sepIncluded
 	}
 }
 

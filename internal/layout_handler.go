@@ -364,17 +364,12 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	nPrefix := len(h.opts.PrefixKeys)
 	iPrefix := state.layoutAttrs[:nPrefix].first()
 	leadSep := state.lineLeadSep(messagePos, iPrefix)
-	buf := state.buf
 	if iPrefix >= 0 {
-		buf = buffer.New()
-		defer buf.Free()
-		buf.Write((*state.buf)[:messagePos])
-		writeLayoutAttrs(buf, state.layoutAttrs[:nPrefix])
-		buf.Write((*state.buf)[messagePos:])
+		insertLayoutAttrs(state.buf, messagePos, state.layoutAttrs[iPrefix:nPrefix])
 	}
-	writeLayoutAttrs(buf, state.layoutAttrs[nPrefix:])
-	buf.WriteByte('\n')
-	line := *buf
+	writeLayoutAttrs(state.buf, state.layoutAttrs[nPrefix:])
+	state.buf.WriteByte('\n')
+	line := *state.buf
 	if leadSep {
 		line = line[1:]
 	}
@@ -444,6 +439,21 @@ func writeLayoutAttrs(buf *buffer.Buffer, attrs layoutAttrs) {
 	for _, a := range attrs {
 		buf.Write(a)
 	}
+}
+
+// insertLayoutAttrs inserts attrs into buf at pos.
+func insertLayoutAttrs(buf *buffer.Buffer, pos int, attrs layoutAttrs) {
+	n := 0
+	for _, a := range attrs {
+		n += len(a)
+	}
+	b := *buf
+	b = slices.Grow(b, n)[:len(b)+n]
+	copy(b[pos+n:], b[pos:])
+	for _, a := range attrs {
+		pos += copy(b[pos:], a)
+	}
+	*buf = b
 }
 
 // lineLeadSep reports whether the line assembled by Handle has a leading attrSep,

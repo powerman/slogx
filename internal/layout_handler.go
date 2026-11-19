@@ -639,8 +639,6 @@ func (s *handleState) appendAttrs(as []Attr) {
 
 // appendAttr appends the Attr's key and value.
 // It handles replacement and elides empty Attrs.
-//
-//nolint:gocognit // Handles group inlining, ReplaceAttr, Source and layout redirection in one pass.
 func (s *handleState) appendAttr(a Attr) {
 	a.Value = a.Value.Resolve()
 	if rep := s.h.opts.ReplaceAttr; rep != nil && a.Value.Kind() != KindGroup {
@@ -670,36 +668,35 @@ func (s *handleState) appendAttr(a Attr) {
 			a.Value = StringValue(string(b))
 		}
 	}
-	//nolint:nestif // Inlining a group with an empty key requires this branching.
 	if a.Value.Kind() == KindGroup {
 		attrs := a.Value.Group()
-		// Output only non-empty groups.
-		if len(attrs) > 0 {
-			// Inline a group with an empty key.
-			if a.Key != "" {
-				s.openGroup(a.Key)
-			}
+		// Output only non-empty groups, inlining a group with an empty key.
+		switch {
+		case len(attrs) == 0:
+		case a.Key == "":
 			s.appendAttrs(attrs)
-			if a.Key != "" {
-				s.closeGroup(a.Key)
-			}
+		default:
+			s.openGroup(a.Key)
+			s.appendAttrs(attrs)
+			s.closeGroup(a.Key)
 		}
-	} else {
-		key := s.key(a.Key)
-
-		// Redirect output to layoutAttrs if needed.
-		kl := s.h.cfg.layout(key)
-		orig := s.beginLayout(kl.slot)
-
-		if kl.hasFormat {
-			s.appendFormat(kl.format, key, a.Value)
-		} else {
-			s.appendKey(key)
-			s.appendValue(key, a.Value, noFormat)
-		}
-
-		s.endLayout(kl.slot, orig)
+		return
 	}
+
+	key := s.key(a.Key)
+
+	// Redirect output to layoutAttrs if needed.
+	kl := s.h.cfg.layout(key)
+	orig := s.beginLayout(kl.slot)
+
+	if kl.hasFormat {
+		s.appendFormat(kl.format, key, a.Value)
+	} else {
+		s.appendKey(key)
+		s.appendValue(key, a.Value, noFormat)
+	}
+
+	s.endLayout(kl.slot, orig)
 }
 
 func (s *handleState) key(key string) string {

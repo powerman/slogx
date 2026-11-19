@@ -150,25 +150,90 @@ type LayoutHandlerOptions struct {
 	SuffixKeys []string
 }
 
-// slotLeadSep reports whether a non-empty layout attr with key has a leading attrSep.
-func (opts *LayoutHandlerOptions) slotLeadSep(key string) bool {
-	_, ok := opts.Format[key]
-	return !ok
+// keyLayout describes how an attr with a given full key is output.
+type keyLayout struct {
+	slot      int        // index in layoutAttrs, or -1
+	format    AttrFormat // valid if hasFormat
+	hasFormat bool
 }
 
-// fast reports whether key needs neither ReplaceAttr nor Format.
-func (opts *LayoutHandlerOptions) fast(key string) bool {
-	_, ok := opts.Format[key]
-	return opts.ReplaceAttr == nil && !ok
+// layoutConfig is derived from LayoutHandlerOptions once and shared by all clones.
+type layoutConfig struct {
+	keys    map[string]keyLayout // keys of Format, PrefixKeys and SuffixKeys
+	nPrefix int                  // number of prefix attrs in layoutAttrs
+	// slotLeadSep reports whether a non-empty layoutAttrs[i] has a leading attrSep.
+	slotLeadSep                  []bool
+	time, level, msg             keyLayout
+	fastTime, fastLevel, fastMsg bool // the key needs neither ReplaceAttr nor Format
+}
+
+func newLayoutConfig(opts *LayoutHandlerOptions) *layoutConfig {
+	// Remove duplicate keys in PrefixKeys and SuffixKeys,
+	// keeping the first occurrence of each key.
+	// If a key is present in both, it is kept in PrefixKeys.
+	seen := make(map[string]bool, len(opts.PrefixKeys)+len(opts.SuffixKeys)+1 /* for MessageKey */)
+	seen[MessageKey] = true // Ignore MessageKey in both.
+	prefixKeys := dedupKeys(opts.PrefixKeys, seen)
+	suffixKeys := dedupKeys(opts.SuffixKeys, seen)
+	slotKeys := slices.Concat(prefixKeys, suffixKeys)
+
+	c := &layoutConfig{
+		keys:        make(map[string]keyLayout, len(opts.Format)+len(slotKeys)),
+		nPrefix:     len(prefixKeys),
+		slotLeadSep: make([]bool, len(slotKeys)),
+	}
+	for k, f := range opts.Format {
+		c.keys[k] = keyLayout{slot: -1, format: f, hasFormat: true}
+	}
+	for i, k := range slotKeys {
+		kl := c.layout(k)
+		kl.slot = i
+		c.keys[k] = kl
+		c.slotLeadSep[i] = !kl.hasFormat
+	}
+
+	c.time = c.layout(TimeKey)
+	c.level = c.layout(LevelKey)
+	c.msg = c.layout(MessageKey)
+	c.fastTime = opts.ReplaceAttr == nil && !c.time.hasFormat
+	c.fastLevel = opts.ReplaceAttr == nil && !c.level.hasFormat
+	c.fastMsg = opts.ReplaceAttr == nil && !c.msg.hasFormat
+	return c
+}
+
+// layout returns the layout of an attr with the full key.
+func (c *layoutConfig) layout(key string) keyLayout {
+	if kl, ok := c.keys[key]; ok {
+		return kl
+	}
+	return keyLayout{slot: -1}
+}
+
+// dedupKeys returns keys without the ones in seen, keeping the first occurrence of each key.
+// It adds each kept key to seen, so a later call drops keys kept by an earlier one.
+func dedupKeys(keys []string, seen map[string]bool) []string {
+	uniq := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if !seen[k] {
+			seen[k] = true
+			uniq = append(uniq, k)
+		}
+	}
+	return uniq
 }
 
 // layoutAttrs holds preformatted prefix and suffix attrs, in order of PrefixKeys and SuffixKeys.
 // A non-empty attr has a leading attrSep unless its key has Format, as appendAttr writes it,
-// so attrs are concatenated as is and slotLeadSep derives the leading attrSep from the key.
+// so attrs are concatenated as is and layoutConfig.slotLeadSep tells which of them start with it.
 type layoutAttrs [][]byte
 
+// makeLayoutAttrs is used by the vendored handler_test.go.
 func makeLayoutAttrs(opts *LayoutHandlerOptions) layoutAttrs {
-	return make([][]byte, len(opts.PrefixKeys)+len(opts.SuffixKeys))
+	return newLayoutConfig(opts).makeLayoutAttrs()
+}
+
+func (c *layoutConfig) makeLayoutAttrs() layoutAttrs {
+	return make(layoutAttrs, len(c.slotLeadSep))
 }
 
 // first returns the index of the first non-empty attr, or -1 if all are empty.
@@ -181,27 +246,10 @@ func (la layoutAttrs) first() int {
 	return -1
 }
 
-// layoutSlot returns the index of key in layoutAttrs, or -1 if key is not a layout key.
-func layoutSlot(key string, opts *LayoutHandlerOptions) int {
-	i := slices.Index(opts.PrefixKeys, key)
-	if i < 0 {
-		i = slices.Index(opts.SuffixKeys, key)
-		if i < 0 {
-			return -1
-		}
-		i += len(opts.PrefixKeys)
-	}
-	return i
-}
-
 // LayoutHandler is a handler created by [NewLayoutHandler].
 type LayoutHandler struct {
 	opts                *LayoutHandlerOptions
-	timeSlot            int         // index of TimeKey in layoutAttrs, or -1
-	levelSlot           int         // index of LevelKey in layoutAttrs, or -1
-	fastTime            bool        // TimeKey needs neither ReplaceAttr nor Format
-	fastLevel           bool        // LevelKey needs neither ReplaceAttr nor Format
-	fastMsg             bool        // MessageKey needs neither ReplaceAttr nor Format
+	cfg                 *layoutConfig
 	preformattedLeadSep bool        // preformattedAttrs has a leading attrSep
 	layoutAttrs         layoutAttrs // preformatted prefix and suffix attrs
 	preformattedAttrs   []byte
@@ -218,39 +266,14 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	if opts == nil {
 		opts = &LayoutHandlerOptions{}
 	}
-
-	// Remove duplicate keys in PrefixKeys and SuffixKeys,
-	// keeping the first occurrence of each key.
-	// If a key is present in both, it is kept in PrefixKeys.
-	seen := make(map[string]bool, len(opts.PrefixKeys)+len(opts.SuffixKeys)+1 /* for MessageKey */)
-	seen[MessageKey] = true // Ignore MessageKey in both.
-	opts.PrefixKeys = dedupKeys(opts.PrefixKeys, seen)
-	opts.SuffixKeys = dedupKeys(opts.SuffixKeys, seen)
-
+	cfg := newLayoutConfig(opts)
 	return &LayoutHandler{
 		opts:        opts,
-		timeSlot:    layoutSlot(TimeKey, opts),
-		levelSlot:   layoutSlot(LevelKey, opts),
-		fastTime:    opts.fast(TimeKey),
-		fastLevel:   opts.fast(LevelKey),
-		fastMsg:     opts.fast(MessageKey),
-		layoutAttrs: makeLayoutAttrs(opts),
+		cfg:         cfg,
+		layoutAttrs: cfg.makeLayoutAttrs(),
 		mu:          &sync.Mutex{},
 		w:           w,
 	}
-}
-
-// dedupKeys returns keys without the ones in seen, keeping the first occurrence of each key.
-// It adds each kept key to seen, so a later call drops keys kept by an earlier one.
-func dedupKeys(keys []string, seen map[string]bool) []string {
-	uniq := make([]string, 0, len(keys))
-	for _, k := range keys {
-		if !seen[k] {
-			seen[k] = true
-			uniq = append(uniq, k)
-		}
-	}
-	return uniq
 }
 
 // clone returns a copy of h which shares the mutex with h.
@@ -318,11 +341,11 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	if !r.Time.IsZero() {
 		key := TimeKey
 		val := r.Time.Round(0) // strip monotonic to match Attr behavior
-		if h.fastTime {
-			orig := state.beginLayout(h.timeSlot)
+		if h.cfg.fastTime {
+			orig := state.beginLayout(h.cfg.time.slot)
 			state.appendKey(key)
 			state.appendTime(key, val)
-			state.endLayout(h.timeSlot, orig)
+			state.endLayout(h.cfg.time.slot, orig)
 		} else {
 			state.appendAttr(Time(key, val))
 		}
@@ -330,11 +353,11 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// level
 	key := LevelKey
 	val := r.Level
-	if h.fastLevel {
-		orig := state.beginLayout(h.levelSlot)
+	if h.cfg.fastLevel {
+		orig := state.beginLayout(h.cfg.level.slot)
 		state.appendKey(key)
 		state.appendString(val.String(), noFormat)
-		state.endLayout(h.levelSlot, orig)
+		state.endLayout(h.cfg.level.slot, orig)
 	} else {
 		state.appendAttr(Any(key, val))
 	}
@@ -351,7 +374,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// message
 	key = MessageKey
 	msg := r.Message
-	if h.fastMsg {
+	if h.cfg.fastMsg {
 		state.appendKey(key)
 		state.appendString(msg, noFormat)
 	} else {
@@ -361,7 +384,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	state.groups = stateGroups // Restore groups passed to ReplaceAttrs.
 	state.appendNonBuiltIns(r)
 
-	nPrefix := len(h.opts.PrefixKeys)
+	nPrefix := h.cfg.nPrefix
 	iPrefix := state.layoutAttrs[:nPrefix].first()
 	leadSep := state.lineLeadSep(messagePos, iPrefix)
 	if iPrefix >= 0 {
@@ -461,15 +484,15 @@ func insertLayoutAttrs(buf *buffer.Buffer, pos int, attrs layoutAttrs) {
 // iPrefix is the index of the first non-empty prefix attr, or -1.
 // It must be called before suffix attrs are appended to buf.
 func (s *handleState) lineLeadSep(messagePos, iPrefix int) bool {
-	opts := s.h.opts
+	cfg := s.h.cfg
 	switch {
 	case messagePos == 0 && iPrefix >= 0:
-		return opts.slotLeadSep(opts.PrefixKeys[iPrefix])
+		return cfg.slotLeadSep[iPrefix]
 	case s.buf.Len() > 0:
 		return s.leadSep
 	}
-	i := s.layoutAttrs[len(opts.PrefixKeys):].first()
-	return i >= 0 && opts.slotLeadSep(opts.SuffixKeys[i])
+	i := s.layoutAttrs[cfg.nPrefix:].first()
+	return i >= 0 && cfg.slotLeadSep[cfg.nPrefix+i]
 }
 
 func (s *handleState) appendNonBuiltIns(r Record) {
@@ -640,17 +663,17 @@ func (s *handleState) appendAttr(a Attr) {
 		key := s.key(a.Key)
 
 		// Redirect output to layoutAttrs if needed.
-		slot := layoutSlot(key, s.h.opts)
-		orig := s.beginLayout(slot)
+		kl := s.h.cfg.layout(key)
+		orig := s.beginLayout(kl.slot)
 
-		if format, ok := s.h.opts.Format[key]; ok {
-			s.appendFormat(format, key, a.Value)
+		if kl.hasFormat {
+			s.appendFormat(kl.format, key, a.Value)
 		} else {
 			s.appendKey(key)
 			s.appendValue(key, a.Value, noFormat)
 		}
 
-		s.endLayout(slot, orig)
+		s.endLayout(kl.slot, orig)
 	}
 }
 

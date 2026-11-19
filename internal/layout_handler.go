@@ -13,6 +13,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"reflect"
 	"slices"
 	"strconv"
@@ -341,24 +342,30 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	if !r.Time.IsZero() {
 		key := TimeKey
 		val := r.Time.Round(0) // strip monotonic to match Attr behavior
-		if h.cfg.fastTime {
+		switch {
+		case h.cfg.fastTime:
 			orig := state.beginLayout(h.cfg.time.slot)
 			state.appendKey(key)
 			state.appendTime(key, val)
 			state.endLayout(h.cfg.time.slot, orig)
-		} else {
+		case h.opts.ReplaceAttr == nil:
+			state.appendBuiltInFormat(&h.cfg.time, key, slog.TimeValue(val))
+		default:
 			state.appendAttr(Time(key, val))
 		}
 	}
 	// level
 	key := LevelKey
 	val := r.Level
-	if h.cfg.fastLevel {
+	switch {
+	case h.cfg.fastLevel:
 		orig := state.beginLayout(h.cfg.level.slot)
 		state.appendKey(key)
 		state.appendString(val.String(), noFormat)
 		state.endLayout(h.cfg.level.slot, orig)
-	} else {
+	case h.opts.ReplaceAttr == nil:
+		state.appendBuiltInFormat(&h.cfg.level, key, AnyValue(val))
+	default:
 		state.appendAttr(Any(key, val))
 	}
 	// source
@@ -374,10 +381,13 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	// message
 	key = MessageKey
 	msg := r.Message
-	if h.cfg.fastMsg {
+	switch {
+	case h.cfg.fastMsg:
 		state.appendKey(key)
 		state.appendString(msg, noFormat)
-	} else {
+	case h.opts.ReplaceAttr == nil:
+		state.appendBuiltInFormat(&h.cfg.msg, key, StringValue(msg))
+	default:
 		state.appendAttr(String(key, msg))
 	}
 
@@ -456,6 +466,16 @@ func (s *handleState) endLayout(i int, orig origBuf) {
 	}
 	s.buf = orig.buf
 	s.leadSep = orig.leadSep
+}
+
+// appendBuiltInFormat appends a built-in attr whose key has Format, when there is no ReplaceAttr.
+// It is the same as appendAttr, but skips steps which are useless for a built-in attr.
+// It is a separate function because inlining it into Handle grows the stack frame
+// and slows down Handle without Format.
+func (s *handleState) appendBuiltInFormat(kl *keyLayout, key string, v Value) {
+	orig := s.beginLayout(kl.slot)
+	s.appendFormat(kl.format, key, v)
+	s.endLayout(kl.slot, orig)
 }
 
 func writeLayoutAttrs(buf *buffer.Buffer, attrs layoutAttrs) {

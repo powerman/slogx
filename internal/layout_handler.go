@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"sync"
@@ -163,9 +164,9 @@ type layoutConfig struct {
 	keys    map[string]keyLayout // keys of Format, PrefixKeys and SuffixKeys
 	nPrefix int                  // number of prefix attrs in layoutAttrs
 	// slotLeadSep reports whether a non-empty layoutAttrs[i] has a leading attrSep.
-	slotLeadSep                  []bool
-	time, level, msg             keyLayout
-	fastTime, fastLevel, fastMsg bool // the key needs neither ReplaceAttr nor Format
+	slotLeadSep                              []bool
+	time, level, source, msg                 keyLayout
+	fastTime, fastLevel, fastSource, fastMsg bool // the key needs neither ReplaceAttr nor Format
 }
 
 func newLayoutConfig(opts *LayoutHandlerOptions) *layoutConfig {
@@ -195,9 +196,11 @@ func newLayoutConfig(opts *LayoutHandlerOptions) *layoutConfig {
 
 	c.time = c.layout(TimeKey)
 	c.level = c.layout(LevelKey)
+	c.source = c.layout(SourceKey)
 	c.msg = c.layout(MessageKey)
 	c.fastTime = opts.ReplaceAttr == nil && !c.time.hasFormat
 	c.fastLevel = opts.ReplaceAttr == nil && !c.level.hasFormat
+	c.fastSource = opts.ReplaceAttr == nil && !c.source.hasFormat
 	c.fastMsg = opts.ReplaceAttr == nil && !c.msg.hasFormat
 	return c
 }
@@ -371,11 +374,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	}
 	// source
 	if h.opts.AddSource {
-		src := recordSource(r)
-		if src == nil {
-			src = &Source{}
-		}
-		state.appendAttr(Any(SourceKey, src))
+		state.appendSource(r.PC)
 	}
 	// Prefix attrs are inserted before the message.
 	messagePos := state.buf.Len()
@@ -478,6 +477,38 @@ func (s *handleState) appendBuiltInFormat(kl *keyLayout, key string, v Value) {
 	orig := s.beginLayout(kl.slot)
 	s.appendFormat(kl.format, key, v)
 	s.endLayout(kl.slot, orig)
+}
+
+// appendSource appends the built-in source attr.
+// When its key needs neither ReplaceAttr nor Format,
+// it avoids allocating Source and the string value made by appendAttr.
+// It is a separate function to keep the stack frame of Handle small.
+func (s *handleState) appendSource(pc uintptr) {
+	if !s.h.cfg.fastSource {
+		src := recordSource(Record{PC: pc})
+		if src == nil {
+			src = &Source{}
+		}
+		s.appendAttr(Any(SourceKey, src))
+		return
+	}
+	if pc == 0 {
+		return // Same as an empty Source: the attr is elided.
+	}
+	f, _ := runtime.CallersFrames([]uintptr{pc}).Next()
+	// The ':' and digits added after File never need quoting,
+	// so only a File which needs quoting (including an empty one) requires the generic path.
+	if needsQuoting(f.File) {
+		s.appendAttr(Any(SourceKey, &Source{Function: f.Function, File: f.File, Line: f.Line}))
+		return
+	}
+	slot := s.h.cfg.source.slot
+	orig := s.beginLayout(slot)
+	s.appendKey(SourceKey)
+	s.buf.WriteString(f.File)
+	s.buf.WriteByte(':')
+	*s.buf = strconv.AppendInt(*s.buf, int64(f.Line), 10) //nolint:mnd // Decimal base.
+	s.endLayout(slot, orig)
 }
 
 func writeLayoutAttrs(buf *buffer.Buffer, attrs layoutAttrs) {

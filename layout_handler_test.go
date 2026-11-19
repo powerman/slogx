@@ -869,6 +869,7 @@ func TestLayoutHandler_BuiltInLayoutKeysMatchTextHandler(tt *testing.T) {
 		prefixKeys []string
 		suffixKeys []string
 	}{
+		{nil, nil},
 		{[]string{slog.TimeKey, slog.LevelKey, slog.SourceKey}, nil},
 		{nil, []string{slog.LevelKey, slog.SourceKey, slog.TimeKey}},
 		{[]string{slog.LevelKey}, []string{slog.TimeKey, slog.SourceKey}},
@@ -891,40 +892,42 @@ func TestLayoutHandler_BuiltInLayoutKeysMatchTextHandler(tt *testing.T) {
 		},
 	}
 	for _, layout := range layouts {
-		for _, addSource := range []bool{false, true} {
-			for _, replace := range []bool{false, true} {
-				for _, rec := range records {
-					name := fmt.Sprintf("%v %v source=%v replace=%v %s",
-						layout.prefixKeys, layout.suffixKeys, addSource, replace, rec.name)
-					tt.Run(name, func(tt *testing.T) {
-						tt.Parallel()
-						t := check.Must(tt)
+		for _, pc := range []uintptr{pcs[0], 0} {
+			for _, addSource := range []bool{false, true} {
+				for _, replace := range []bool{false, true} {
+					for _, rec := range records {
+						name := fmt.Sprintf("%v %v pc=%v source=%v replace=%v %s",
+							layout.prefixKeys, layout.suffixKeys, pc != 0, addSource, replace, rec.name)
+						tt.Run(name, func(tt *testing.T) {
+							tt.Parallel()
+							t := check.Must(tt)
 
-						var replaceAttr func([]string, slog.Attr) slog.Attr
-						if replace { // Disables the fast path for built-in attrs.
-							replaceAttr = func(_ []string, a slog.Attr) slog.Attr { return a }
-						}
-						var textBuf, layoutBuf bytes.Buffer
-						textHandler := slog.NewTextHandler(&textBuf, &slog.HandlerOptions{
-							AddSource:   addSource,
-							ReplaceAttr: replaceAttr,
-						})
-						layoutHandler := slogx.NewLayoutHandler(&layoutBuf, &slogx.LayoutHandlerOptions{
-							AddSource:   addSource,
-							ReplaceAttr: replaceAttr,
-							PrefixKeys:  layout.prefixKeys,
-							SuffixKeys:  layout.suffixKeys,
-						})
-						r := slog.NewRecord(rec.time, slog.LevelInfo, "msg", pcs[0])
-						r.Add(rec.args...)
-						for _, h := range []slog.Handler{textHandler, layoutHandler} {
-							t.Nil(h.WithAttrs(rec.with).Handle(tt.Context(), r))
-							t.Nil(h.WithGroup("g").WithAttrs(rec.with).Handle(tt.Context(), r))
-						}
+							var replaceAttr func([]string, slog.Attr) slog.Attr
+							if replace { // Disables the fast path for built-in attrs.
+								replaceAttr = func(_ []string, a slog.Attr) slog.Attr { return a }
+							}
+							var textBuf, layoutBuf bytes.Buffer
+							textHandler := slog.NewTextHandler(&textBuf, &slog.HandlerOptions{
+								AddSource:   addSource,
+								ReplaceAttr: replaceAttr,
+							})
+							layoutHandler := slogx.NewLayoutHandler(&layoutBuf, &slogx.LayoutHandlerOptions{
+								AddSource:   addSource,
+								ReplaceAttr: replaceAttr,
+								PrefixKeys:  layout.prefixKeys,
+								SuffixKeys:  layout.suffixKeys,
+							})
+							r := slog.NewRecord(rec.time, slog.LevelInfo, "msg", pc)
+							r.Add(rec.args...)
+							for _, h := range []slog.Handler{textHandler, layoutHandler} {
+								t.Nil(h.WithAttrs(rec.with).Handle(tt.Context(), r))
+								t.Nil(h.WithGroup("g").WithAttrs(rec.with).Handle(tt.Context(), r))
+							}
 
-						want := applyLayout(textBuf.String(), layout.prefixKeys, layout.suffixKeys)
-						t.Equal(layoutBuf.String(), want)
-					})
+							want := applyLayout(textBuf.String(), layout.prefixKeys, layout.suffixKeys)
+							t.Equal(layoutBuf.String(), want)
+						})
+					}
 				}
 			}
 		}
@@ -1529,7 +1532,9 @@ func BenchmarkLayout(b *testing.B) {
 		{"all-opts", slogx.NewLayoutHandler(io.Discard, &opts)},
 		{"all-opts-source", slogx.NewLayoutHandler(io.Discard, &optsSource)},
 		{"no-opts", slogx.NewLayoutHandler(io.Discard, nil)},
+		{"no-opts-source", slogx.NewLayoutHandler(io.Discard, &slogx.LayoutHandlerOptions{AddSource: true})},
 		{"std-text", slog.NewTextHandler(io.Discard, nil)},
+		{"std-text-source", slog.NewTextHandler(io.Discard, &slog.HandlerOptions{AddSource: true})},
 	} {
 		logger := slog.New(handler.h)
 		b.Run(handler.name, func(b *testing.B) {

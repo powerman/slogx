@@ -170,6 +170,8 @@ func TestBootstrapHandler_WithAfterHandOff(tt *testing.T) {
 	var buf bytes.Buffer
 	bootstrap := slogx.MustBootstrapHandler(slogx.BootstrapHandlerConfig{})
 	old := bootstrap.WithAttrs([]slog.Attr{slog.Int("a", 1)})
+	t.True(old.WithAttrs(nil) == old)
+	t.True(old.WithGroup("") == old)
 	t.Nil(bootstrap.HandOffTo(newTextHandler(&buf, nil)))
 
 	for _, h := range []slog.Handler{bootstrap, old} {
@@ -177,7 +179,14 @@ func TestBootstrapHandler_WithAfterHandOff(tt *testing.T) {
 		t.False(ok)
 		_, ok = h.WithGroup("g").(*slogx.BootstrapHandler)
 		t.False(ok)
+		t.True(h.WithGroup("") == h)
 	}
+
+	next := old.WithAttrs(nil)
+	_, ok := next.(*slogx.BootstrapHandler)
+	t.False(ok)
+	slog.New(next).Info("msg")
+	t.Equal(buf.String(), "level=INFO msg=msg a=1\n")
 }
 
 func TestBootstrapHandler_Slogtest(tt *testing.T) {

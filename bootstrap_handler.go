@@ -93,6 +93,7 @@ const (
 // BootstrapHandler keeps working as a pass-through after HandOffTo,
 // so code which has captured it during the bootstrap (e.g. a logger stored by a library)
 // doesn't lose records, at the cost of one extra method call (a few ns) per record.
+// To avoid this cost replace it by the real handler using [BootstrapHandler.WithAttrs](nil).
 //
 // Hint: records are held as is, so [Stack] captures the stack of HandOffTo,
 // use [ErrorStack] instead.
@@ -159,6 +160,12 @@ func (h *BootstrapHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 // WithAttrs implements [slog.Handler] interface.
+//
+// After HandOffTo it returns a handler derived from the real handler,
+// so h.WithAttrs(nil) returns the real handler with groups and attrs of h:
+// use it to replace h by the real handler.
+// Note: [slog.Logger.With] without args returns the same logger,
+// so call WithAttrs(nil) on [slog.Logger.Handler].
 func (h *BootstrapHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	next := h.passthrough.Load()
 	if next == nil {
@@ -176,14 +183,15 @@ func (h *BootstrapHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 }
 
 // WithGroup implements [slog.Handler] interface.
+//
+// Unlike WithAttrs(nil), WithGroup("") returns h even after HandOffTo.
 func (h *BootstrapHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return h
+	}
 	next := h.passthrough.Load()
 	if next == nil {
-		goa := h.goa.WithGroup(name)
-		if goa == h.goa {
-			return h
-		}
-		n := h.derive(goa)
+		n := h.derive(h.goa.WithGroup(name))
 		if n != nil {
 			return n
 		}

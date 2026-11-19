@@ -16,20 +16,18 @@ import (
 // because code which runs while flags are parsed (hooks, validation) logs too,
 // but the level and format (text/json) is known only after parsing.
 //
-// If parsing failed do not call HandOffTo:
-// print the final error straight through the default handler.
-// Records held from hooks and from goroutines which they have started stay unprinted.
+// If parsing failed the level is not known,
+// so hand off to a handler which prints only errors:
+// held errors are printed before the final one.
 //
 // Replacing bootstrapHandler by the real handler after HandOffTo is optional,
 // see the block at the end of the example.
 func ExampleBootstrapHandler() {
 	defer slog.SetDefault(slog.Default())
 
-	newLogger := func(h slog.Handler) *slog.Logger { return slog.New(h).With("app", "example") }
-
 	// Phase 1: Setup bootstrap logger for phase 2.
 	bootstrapHandler := slogx.MustBootstrapHandler(slogx.BootstrapHandlerConfig{})
-	logger := newLogger(bootstrapHandler)
+	logger := slog.New(bootstrapHandler).With("app", "example")
 	slog.SetDefault(logger)
 
 	var level slog.LevelVar
@@ -43,19 +41,17 @@ func ExampleBootstrapHandler() {
 		return nil
 	}()
 	if err != nil {
-		defaultHandler := newTextHandler(os.Stdout, slog.LevelError) // The level is not known.
-		logger = newLogger(defaultHandler)
+		_ = bootstrapHandler.HandOffTo(newTextHandler(os.Stdout, slog.LevelError))
 		logger.Error("failed to start", "err", err)
 		os.Exit(2)
 	}
 
 	// Phase 3: Hand off held records to the real handler, it is known now.
-	appHandler := newTextHandler(os.Stdout, &level)
-	_ = bootstrapHandler.HandOffTo(appHandler) // Returns when bootstrapHandler is a pass-through.
+	_ = bootstrapHandler.HandOffTo(newTextHandler(os.Stdout, &level))
 
 	// Optional: replace bootstrapHandler by the real handler to save one extra call per record.
 	// Code which has captured the logger during phase 2 keeps working through bootstrapHandler.
-	logger = newLogger(appHandler)
+	logger = slog.New(logger.Handler().WithAttrs(nil)) // Keeps "app".
 	slog.SetDefault(logger)
 
 	slog.Info("started")
@@ -70,14 +66,10 @@ func ExampleBootstrapHandler() {
 func ExampleBootstrapHandler_contextHandler() {
 	defer slog.SetDefault(slog.Default())
 
-	newLoggerCtx := func(ctx context.Context, h slog.Handler) context.Context {
-		ctx = slogx.SetDefaultContextHandler(ctx, h)
-		return slogx.ContextWith(ctx, "app", "example")
-	}
-
 	// Phase 1: Setup bootstrap logger for phase 2.
 	bootstrapHandler := slogx.MustBootstrapHandler(slogx.BootstrapHandlerConfig{})
-	ctx := newLoggerCtx(context.Background(), bootstrapHandler)
+	ctx := slogx.SetDefaultContextHandler(context.Background(), bootstrapHandler)
+	ctx = slogx.ContextWith(ctx, "app", "example")
 
 	var level slog.LevelVar
 
@@ -90,20 +82,19 @@ func ExampleBootstrapHandler_contextHandler() {
 		return nil
 	}()
 	if err != nil {
-		defaultHandler := newTextHandler(os.Stdout, slog.LevelError)
-		ctx = newLoggerCtx(ctx, defaultHandler)
+		_ = bootstrapHandler.HandOffTo(newTextHandler(os.Stdout, slog.LevelError))
 		slog.ErrorContext(ctx, "failed to start", "err", err)
 		os.Exit(2)
 	}
 
 	// Phase 3: Hand off held records to the real handler, it is known now.
-	appHandler := newTextHandler(os.Stdout, &level)
-	_ = bootstrapHandler.HandOffTo(appHandler) // Returns when bootstrapHandler is a pass-through.
+	_ = bootstrapHandler.HandOffTo(newTextHandler(os.Stdout, &level))
 
 	// Optional: replace bootstrapHandler by the real handler to save one extra call per record.
 	// A context which has been passed to other code during phase 2
 	// keeps working through bootstrapHandler.
-	ctx = newLoggerCtx(ctx, appHandler)
+	handler := slogx.HandlerFromContext(ctx).WithAttrs(nil) // Keeps "app".
+	ctx = slogx.SetDefaultContextHandler(ctx, handler)
 
 	slog.InfoContext(ctx, "started")
 	// Output:
@@ -123,14 +114,10 @@ func ExampleBootstrapHandler_middleware() {
 		slogformatter.FormatByKey("password", func(slog.Value) slog.Value {
 			return slog.StringValue("***")
 		}))
-	pipe := slogmulti.Pipe(redact)
-	newLogger := func(h slog.Handler) *slog.Logger {
-		return slog.New(pipe.Handler(h)).With("app", "example")
-	}
 
 	// Phase 1: Setup bootstrap logger for phase 2.
 	bootstrapHandler := slogx.MustBootstrapHandler(slogx.BootstrapHandlerConfig{})
-	logger := newLogger(bootstrapHandler)
+	logger := slog.New(slogmulti.Pipe(redact).Handler(bootstrapHandler)).With("app", "example")
 	slog.SetDefault(logger)
 
 	var level slog.LevelVar
@@ -145,22 +132,20 @@ func ExampleBootstrapHandler_middleware() {
 		return nil
 	}()
 	if err != nil {
-		defaultHandler := newTextHandler(os.Stdout, slog.LevelError)
-		logger = newLogger(defaultHandler)
+		_ = bootstrapHandler.HandOffTo(newTextHandler(os.Stdout, slog.LevelError))
 		logger.Error("failed to start", "err", err)
 		os.Exit(2)
 	}
 
 	// Phase 3: Hand off held records to the sinks, they are known now.
-	appHandler := slogmulti.Fanout(
+	_ = bootstrapHandler.HandOffTo(slogmulti.Fanout(
 		newTextHandler(os.Stdout, &level),
 		newJSONHandler(os.Stdout, &level),
-	)
-	_ = bootstrapHandler.HandOffTo(appHandler) // Returns when bootstrapHandler is a pass-through.
+	))
 
 	// Optional: replace bootstrapHandler by the real handler to save one extra call per record.
 	// Code which has captured the logger during phase 2 keeps working through bootstrapHandler.
-	logger = newLogger(appHandler)
+	logger = slog.New(logger.Handler().WithAttrs(nil)) // Keeps "app".
 	slog.SetDefault(logger)
 
 	slog.Info("started")

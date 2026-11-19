@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-11-19
+
+### 🐛 Fixed
+
+- Stop built-in layout attrs from leaking into the next record by @powerman in [1f0c503]
+- Apply layout keys to built-in time and level attrs by @powerman in [71fe97c]
+- Output only the last attr for layout keys including built-in ones by @powerman in [d730bca]
+- Avoid panic when WrapHandler next handler is uncomparable by @powerman in [6c2d0c1]
+- Do not retain large layout attr buffers in the pool by @powerman in [72e17e7]
+- Use default context for context.TODO in NewDefaultContextLogger by @powerman in [e0882fe]
+- Separate attrs after With attr with empty formatted output by @powerman in [38ff7e5]
+
+### ⚡ Performance
+
+- Avoid allocations for layout keys by @powerman in [586e007]
+- Avoid allocations in LayoutHandler WithAttrs and WithGroup by @powerman in [f0f6269]
+- Format custom time layouts without allocation in LayoutHandler by @powerman in [607cfa7]
+- Keep LayoutHandler key prefix buffer in pooled handle state by @powerman in [d9cf8d5]
+- Insert LayoutHandler prefix attrs without a second buffer by @powerman in [e18486b]
+- Format Level values without allocation by @powerman in [d9a940a]
+- Output formatted built-in attrs without generic attr processing by @powerman in [547a2cd]
+- Format source position without fmt by @powerman in [add073f]
+- Share LayoutHandler layoutAttrs with handlers made by WithGroup by @powerman in [5e77c56]
+- Format LayoutHandler source attr without generic attr processing by @powerman in [74b18b5]
+
+### 📚 Documentation
+
+- Describe vendored files and LayoutHandler divergence from upstream by @powerman in [b63358d]
+- Describe logging recovered panics with Stack by @powerman in [2fc1e18]
+- Correct frames shown by Stack in recovered panic logs by @powerman in [b52cb45]
+- Fix stale comments in LayoutHandler by @powerman in [a4e6285]
+- Fix misleading comments in LayoutHandler handleState by @powerman in [604942f]
+- Update LayoutHandler file header with copyright and origin by @powerman in [6cd8193]
+
+[0.5.2]: https://github.com/powerman/slogx/compare/v0.5.1..v0.5.2
+[1f0c503]: https://github.com/powerman/slogx/commit/1f0c50304a40a44e1e64fd7fd85db39a6ab0d840
+[71fe97c]: https://github.com/powerman/slogx/commit/71fe97cf596c2fb5fa1b21d829694f25e3a89cfd
+[d730bca]: https://github.com/powerman/slogx/commit/d730bcac413aa0e7c4969983500e4720ed238b51
+[586e007]: https://github.com/powerman/slogx/commit/586e007beb4c141d86040d52559783ac315dc2f5
+[b63358d]: https://github.com/powerman/slogx/commit/b63358df33375bfc91a1a2b9c3ca426de76568d0
+[6c2d0c1]: https://github.com/powerman/slogx/commit/6c2d0c19b83ad073214c512670f507ab273236e2
+[72e17e7]: https://github.com/powerman/slogx/commit/72e17e7cdd5b6139790765cac165a817abcf5aa2
+[e0882fe]: https://github.com/powerman/slogx/commit/e0882fe496a352fd4039642ffd60eb69c9ef3201
+[f0f6269]: https://github.com/powerman/slogx/commit/f0f62696c73bb279d7afab3be0b1397dd0580f88
+[2fc1e18]: https://github.com/powerman/slogx/commit/2fc1e18acbe470426ac3d7b0aa947e608c2c57e5
+[b52cb45]: https://github.com/powerman/slogx/commit/b52cb4522721741f57b372015fcae1ee71a96bb6
+[607cfa7]: https://github.com/powerman/slogx/commit/607cfa7da3ee2750230bf803fcf7f2b9a3a09282
+[d9cf8d5]: https://github.com/powerman/slogx/commit/d9cf8d5ab3e127de6d6e3e7d80de6569560e02c6
+[a4e6285]: https://github.com/powerman/slogx/commit/a4e6285fd8cdec6650f056b0e136650496c7b9ed
+[38ff7e5]: https://github.com/powerman/slogx/commit/38ff7e5ac74f83e834a756711c87756c8ebd866e
+[e18486b]: https://github.com/powerman/slogx/commit/e18486ba5f1d73068eb834ed934a43bb1cea77ae
+[d9a940a]: https://github.com/powerman/slogx/commit/d9a940a75b25c81cc44b0dbd775f0b9c6f963a44
+[547a2cd]: https://github.com/powerman/slogx/commit/547a2cdd43cd11cba4b33492fec619c9bba2bbb0
+[add073f]: https://github.com/powerman/slogx/commit/add073faab20244509f233d650e7446a2d1cc52c
+[604942f]: https://github.com/powerman/slogx/commit/604942fbb27ec4add49903ac90b80abd4d0b5fd7
+[5e77c56]: https://github.com/powerman/slogx/commit/5e77c564ee458c314a8d50130a5c0cf4ffc89bd9
+[74b18b5]: https://github.com/powerman/slogx/commit/74b18b505689cff337d7565f37b4a3b6b24b5ae1
+[6cd8193]: https://github.com/powerman/slogx/commit/6cd8193febb4d5dc9e1f9ec93ff164500688eaa6
+
 ## [0.5.1] - 2026-11-18
 
 ### ⚡ Performance

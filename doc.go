@@ -13,6 +13,7 @@ Package slogx contains extensions for [log/slog].
     using [ContextWith], [ContextWithAttrs], and [ContextWithGroup] functions
     and have them automatically included in log records
     when using default logger functions like [slog.InfoContext] etc.
+    [HandlerFromContext] returns the handler stored in a context.
     [NewDefaultContextLogger] provides a compatibility with third-party libraries
     which use non-Context-aware slog functions/methods.
     [NewContextMiddleware] provides a compatibility with [github.com/samber/slog-multi.Pipe].

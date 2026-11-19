@@ -124,6 +124,22 @@ func TestContextWith(tt *testing.T) {
 	t.Match(buf.String(), `"Some message" k1=v1 k2=2 g1.k3=v3 g1.k4=4 g1.g2.k5=v5 g1.g2.k6=6\n$`)
 }
 
+func TestHandlerFromContext(tt *testing.T) {
+	tt.Parallel()
+	t := check.Must(tt)
+
+	t.Nil(slogx.HandlerFromContext(t.Context()))
+
+	var buf bytes.Buffer
+	next := slog.NewTextHandler(&buf, nil)
+	ctx, _ := slogx.NewContextHandler(t.Context(), next)
+	t.Equal(slogx.HandlerFromContext(ctx), slog.Handler(next))
+
+	ctx = slogx.ContextWith(ctx, "k", "v")
+	slog.New(slogx.HandlerFromContext(ctx)).Info("msg")
+	t.Match(buf.String(), ` msg=msg k=v\n$`)
+}
+
 //nolint:paralleltest // Calls SetDefaultContextHandler.
 func TestLaxContextHandler(tt *testing.T) {
 	t := check.Must(tt)

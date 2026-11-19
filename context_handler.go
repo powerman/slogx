@@ -22,12 +22,6 @@ func newContextWithHandler(ctx context.Context, handler slog.Handler) context.Co
 	return context.WithValue(ctx, contextKeyHandler, handler)
 }
 
-// handlerFromContext returns a Handler value stored in ctx if exists or nil.
-func handlerFromContext(ctx context.Context) slog.Handler {
-	handler, _ := ctx.Value(contextKeyHandler).(slog.Handler)
-	return handler
-}
-
 type contextHandlerConfig struct {
 	omitBadCtx bool
 }
@@ -106,7 +100,7 @@ func NewContextHandler(ctx context.Context, next slog.Handler, opts ...ContextHa
 	}
 	h := NewWrapHandler(next, WrapHandlerConfig{
 		Enabled: func(ctx context.Context, l slog.Level, _ *GroupOrAttrs, next slog.Handler) bool {
-			handler := handlerFromContext(ctx)
+			handler := HandlerFromContext(ctx)
 			if handler == nil {
 				handler = next
 			}
@@ -114,7 +108,7 @@ func NewContextHandler(ctx context.Context, next slog.Handler, opts ...ContextHa
 		},
 		Handle: func(ctx context.Context, r slog.Record, goa *GroupOrAttrs, next slog.Handler) error {
 			r = goa.Record(r)
-			handler := handlerFromContext(ctx)
+			handler := HandlerFromContext(ctx)
 			if handler == nil {
 				handler = next
 				if !cfg.omitBadCtx {
@@ -164,7 +158,7 @@ func SetDefaultContextHandler(ctx context.Context, next slog.Handler, opts ...Co
 //
 // Panics if ctx does not contain a handler.
 func ContextWith(ctx context.Context, args ...any) context.Context {
-	handler := handlerFromContext(ctx)
+	handler := HandlerFromContext(ctx)
 	return newContextWithHandler(ctx, handler.WithAttrs(internal.ArgsToAttrSlice(args)))
 }
 
@@ -173,7 +167,7 @@ func ContextWith(ctx context.Context, args ...any) context.Context {
 //
 // Panics if ctx does not contain a handler.
 func ContextWithAttrs(ctx context.Context, attrs ...slog.Attr) context.Context {
-	handler := handlerFromContext(ctx)
+	handler := HandlerFromContext(ctx)
 	return newContextWithHandler(ctx, handler.WithAttrs(attrs))
 }
 
@@ -182,8 +176,16 @@ func ContextWithAttrs(ctx context.Context, attrs ...slog.Attr) context.Context {
 //
 // Panics if ctx does not contain a handler.
 func ContextWithGroup(ctx context.Context, group string) context.Context {
-	handler := handlerFromContext(ctx)
+	handler := HandlerFromContext(ctx)
 	return newContextWithHandler(ctx, handler.WithGroup(group))
+}
+
+// HandlerFromContext returns a handler stored in ctx
+// by [NewContextHandler], [ContextWith], [ContextWithAttrs] or [ContextWithGroup],
+// or nil if ctx does not contain a handler.
+func HandlerFromContext(ctx context.Context) slog.Handler {
+	handler, _ := ctx.Value(contextKeyHandler).(slog.Handler)
+	return handler
 }
 
 // NewDefaultContextLogger creates a new [*slog.Logger] which uses defaultCtx

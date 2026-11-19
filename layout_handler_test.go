@@ -1520,11 +1520,14 @@ func BenchmarkLayout(b *testing.B) {
 			slogx.StackKey,
 		},
 	}
+	optsSource := opts
+	optsSource.AddSource = true
 	for _, handler := range []struct {
 		name string
 		h    slog.Handler
 	}{
 		{"all-opts", slogx.NewLayoutHandler(io.Discard, &opts)},
+		{"all-opts-source", slogx.NewLayoutHandler(io.Discard, &optsSource)},
 		{"no-opts", slogx.NewLayoutHandler(io.Discard, nil)},
 		{"std-text", slog.NewTextHandler(io.Discard, nil)},
 	} {

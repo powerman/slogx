@@ -662,7 +662,11 @@ func (s *handleState) appendAttr(a Attr) {
 			if sourceIsEmpty(src) {
 				return
 			}
-			a.Value = StringValue(fmt.Sprintf("%s:%d", src.File, src.Line))
+			var arr [128]byte
+			b := append(arr[:0], src.File...)
+			b = append(b, ':')
+			b = strconv.AppendInt(b, int64(src.Line), 10) //nolint:mnd // Decimal base.
+			a.Value = StringValue(string(b))
 		}
 	}
 	//nolint:nestif // Inlining a group with an empty key requires this branching.

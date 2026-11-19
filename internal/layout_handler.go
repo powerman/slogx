@@ -557,7 +557,6 @@ func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buff
 	s.layoutAttrs = layoutAttrs
 	s.buf = buf
 	s.freeBuf = freeBuf
-	s.leadSep = false
 	s.prefix = (*buffer.Buffer)(&s.prefixBuf)
 	if h.opts.ReplaceAttr != nil {
 		s.groups = groupPool.Get().(*[]string)

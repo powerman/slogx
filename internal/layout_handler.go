@@ -598,8 +598,9 @@ func (s *handleState) free() {
 	if cap(s.prefixBuf) > maxPooledBufSize {
 		s.prefixBuf = nil
 	}
-	clear(s.layoutAttrsBuf) // avoid retaining attrs of this call
-	*s = handleState{       // avoid retaining other references
+	// Private layoutAttrs must start empty on reuse, and must not retain attrs of this call.
+	clear(s.layoutAttrsBuf)
+	*s = handleState{ // avoid retaining other references
 		layoutAttrsBuf: s.layoutAttrsBuf[:0],
 		slotBufs:       s.slotBufs,
 		prefixBuf:      s.prefixBuf[:0],
@@ -637,7 +638,7 @@ func (s *handleState) appendAttrs(as []Attr) {
 }
 
 // appendAttr appends the Attr's key and value.
-// It handles replacement and checking for an empty key.
+// It handles replacement and elides empty Attrs.
 //
 //nolint:gocognit // Handles group inlining, ReplaceAttr, Source and layout redirection in one pass.
 func (s *handleState) appendAttr(a Attr) {

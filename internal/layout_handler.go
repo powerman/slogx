@@ -428,9 +428,10 @@ type handleState struct {
 	buf       *buffer.Buffer
 	prefix    *buffer.Buffer // key prefix
 	groups    *[]string      // pool-allocated slice of active groups, for ReplaceAttr
-	private   bool           // are layoutAttrs private (see newPrivateHandleState)?
-	freeBuf   bool           // should buf be freed?
-	leadSep   bool           // buf has a leading attrSep
+	// private reports whether layoutAttrs are private (see newPrivateHandleState)
+	// and buf is owned by the state, so free returns it to its pool.
+	private bool
+	leadSep bool // buf has a leading attrSep
 }
 
 type origBuf struct {
@@ -551,13 +552,15 @@ var handleStatePool = sync.Pool{New: func() any { //nolint:gochecknoglobals // s
 	return &handleState{}
 }}
 
-// newHandleState returns a pooled handleState which modifies layoutAttrs in place.
-func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buffer, freeBuf bool) *handleState {
+// newHandleState returns a pooled handleState.
+// If private is false, the state modifies layoutAttrs in place and does not free buf.
+// Only newPrivateHandleState may pass true, because it also prepares private layoutAttrs.
+func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buffer, private bool) *handleState {
 	s := handleStatePool.Get().(*handleState)
 	s.h = h
 	s.layoutAttrs = layoutAttrs
 	s.buf = buf
-	s.freeBuf = freeBuf
+	s.private = private
 	s.prefix = (*buffer.Buffer)(&s.prefixBuf)
 	if h.opts.ReplaceAttr != nil {
 		s.groups = groupPool.Get().(*[]string)
@@ -575,7 +578,6 @@ func (h *LayoutHandler) newPrivateHandleState() *handleState {
 	s := h.newHandleState(nil, buffer.New(), true)
 	s.layoutAttrsBuf = slices.Grow(s.layoutAttrsBuf[:0], n)[:n]
 	s.layoutAttrs = s.layoutAttrsBuf
-	s.private = true
 	if n > len(s.slotBufs) {
 		s.slotBufs = append(s.slotBufs, make([][]byte, n-len(s.slotBufs))...)
 	}
@@ -583,7 +585,7 @@ func (h *LayoutHandler) newPrivateHandleState() *handleState {
 }
 
 func (s *handleState) free() {
-	if s.freeBuf {
+	if s.private {
 		s.buf.Free()
 	}
 	if gs := s.groups; gs != nil {

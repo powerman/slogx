@@ -150,6 +150,12 @@ type LayoutHandlerOptions struct {
 	SuffixKeys []string
 }
 
+// fast reports whether key needs neither ReplaceAttr nor Format.
+func (opts *LayoutHandlerOptions) fast(key string) bool {
+	_, ok := opts.Format[key]
+	return opts.ReplaceAttr == nil && !ok
+}
+
 type layoutAttrs [][]byte // index from prefix/suffix keys -> preformatted attr
 
 func makeLayoutAttrs(opts *LayoutHandlerOptions) layoutAttrs {
@@ -219,17 +225,13 @@ func NewLayoutHandler(w io.Writer, opts *LayoutHandlerOptions) *LayoutHandler {
 	opts.PrefixKeys = dedupKeys(opts.PrefixKeys, seen)
 	opts.SuffixKeys = dedupKeys(opts.SuffixKeys, seen)
 
-	fastFor := func(key string) bool {
-		_, ok := opts.Format[key]
-		return opts.ReplaceAttr == nil && !ok
-	}
 	return &LayoutHandler{
 		opts:        opts,
 		timeSlot:    layoutSlot(TimeKey, opts),
 		levelSlot:   layoutSlot(LevelKey, opts),
-		fastTime:    fastFor(TimeKey),
-		fastLevel:   fastFor(LevelKey),
-		fastMsg:     fastFor(MessageKey),
+		fastTime:    opts.fast(TimeKey),
+		fastLevel:   opts.fast(LevelKey),
+		fastMsg:     opts.fast(MessageKey),
 		layoutAttrs: makeLayoutAttrs(opts),
 		mu:          &sync.Mutex{},
 		w:           w,

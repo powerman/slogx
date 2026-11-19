@@ -804,6 +804,14 @@ func (s *handleState) appendString(str string, format AttrFormat) {
 }
 
 func (s *handleState) appendValue(key string, v Value, format AttrFormat) {
+	// Avoid allocation in Level.AppendText called by appendTextValue: output is the same.
+	if v.Kind() == KindAny {
+		if l, ok := v.Any().(Level); ok {
+			s.appendString(l.String(), format)
+			return
+		}
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			// If it panics with a nil pointer, the most likely cases are

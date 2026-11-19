@@ -1344,6 +1344,9 @@ func TestLayoutHandler_AttrSepAfterFormat(t *testing.T) {
 		{map[string]string{"a": "%s", slog.LevelKey: "", slog.MessageKey: ""}, nil, "", "", "b=1\n"},
 		// Prefix attrs are inserted before the message, which has empty Format output here.
 		{map[string]string{slog.LevelKey: "", slog.MessageKey: "%s"}, []string{"a"}, "", "x", "a=x b=1\n"},
+		// Prefix attrs are inserted after built-ins, so they do not start the line.
+		{map[string]string{"a": " a=%s"}, []string{"a"}, "hi", "x", "level=INFO a=x msg=hi b=1\n"},
+		{map[string]string{slog.LevelKey: "%s"}, []string{"a"}, "hi", "x", "INFO a=x msg=hi b=1\n"},
 	}
 	for _, tc := range tests {
 		t.Run(fmt.Sprintf("%v %q", tc.format, tc.a), func(tt *testing.T) {

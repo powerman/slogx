@@ -150,25 +150,35 @@ type LayoutHandlerOptions struct {
 	SuffixKeys []string
 }
 
+// slotLeadSep reports whether a non-empty layout attr with key has a leading attrSep.
+func (opts *LayoutHandlerOptions) slotLeadSep(key string) bool {
+	_, ok := opts.Format[key]
+	return !ok
+}
+
 // fast reports whether key needs neither ReplaceAttr nor Format.
 func (opts *LayoutHandlerOptions) fast(key string) bool {
 	_, ok := opts.Format[key]
 	return opts.ReplaceAttr == nil && !ok
 }
 
-type layoutAttrs [][]byte // index from prefix/suffix keys -> preformatted attr
+// layoutAttrs holds preformatted prefix and suffix attrs, in order of PrefixKeys and SuffixKeys.
+// A non-empty attr has a leading attrSep unless its key has Format, as appendAttr writes it,
+// so attrs are concatenated as is and slotLeadSep derives the leading attrSep from the key.
+type layoutAttrs [][]byte
 
 func makeLayoutAttrs(opts *LayoutHandlerOptions) layoutAttrs {
 	return make([][]byte, len(opts.PrefixKeys)+len(opts.SuffixKeys))
 }
 
-func (la layoutAttrs) hasPrefix(opts *LayoutHandlerOptions) bool {
-	for i := range opts.PrefixKeys {
-		if len(la[i]) > 0 {
-			return true
+// first returns the index of the first non-empty attr, or -1 if all are empty.
+func (la layoutAttrs) first() int {
+	for i, a := range la {
+		if len(a) > 0 {
+			return i
 		}
 	}
-	return false
+	return -1
 }
 
 // layoutSlot returns the index of key in layoutAttrs, or -1 if key is not a layout key.
@@ -184,29 +194,21 @@ func layoutSlot(key string, opts *LayoutHandlerOptions) int {
 	return i
 }
 
-type startSepState int
-
-const (
-	sepNone     startSepState = iota // no attrs yet
-	sepSkipped                       // first attr has no Format (output without required attrSep)
-	sepIncluded                      // starts with attrSep or non-empty Format output (needs no attrSep)
-)
-
 // LayoutHandler is a handler created by [NewLayoutHandler].
 type LayoutHandler struct {
-	opts                   *LayoutHandlerOptions
-	timeSlot               int         // index of TimeKey in layoutAttrs, or -1
-	levelSlot              int         // index of LevelKey in layoutAttrs, or -1
-	fastTime               bool        // TimeKey needs neither ReplaceAttr nor Format
-	fastLevel              bool        // LevelKey needs neither ReplaceAttr nor Format
-	fastMsg                bool        // MessageKey needs neither ReplaceAttr nor Format
-	layoutAttrs            layoutAttrs // preformatted prefix and suffix attrs
-	preformattedAttrs      []byte
-	preformattedAttrsStart startSepState
-	groups                 []string // all groups started from WithGroup
-	prefix                 []byte   // key prefix
-	mu                     *sync.Mutex
-	w                      io.Writer
+	opts                *LayoutHandlerOptions
+	timeSlot            int         // index of TimeKey in layoutAttrs, or -1
+	levelSlot           int         // index of LevelKey in layoutAttrs, or -1
+	fastTime            bool        // TimeKey needs neither ReplaceAttr nor Format
+	fastLevel           bool        // LevelKey needs neither ReplaceAttr nor Format
+	fastMsg             bool        // MessageKey needs neither ReplaceAttr nor Format
+	preformattedLeadSep bool        // preformattedAttrs has a leading attrSep
+	layoutAttrs         layoutAttrs // preformatted prefix and suffix attrs
+	preformattedAttrs   []byte
+	groups              []string // all groups started from WithGroup
+	prefix              []byte   // key prefix
+	mu                  *sync.Mutex
+	w                   io.Writer
 }
 
 // NewLayoutHandler creates a [LayoutHandler] that writes to w,
@@ -283,10 +285,10 @@ func (h *LayoutHandler) WithAttrs(as []Attr) Handler {
 	// Pre-format the attributes as an optimization.
 	state := h2.newHandleState(h2.layoutAttrs, (*buffer.Buffer)(&h2.preformattedAttrs), false)
 	defer state.free()
-	state.bufStart = h2.preformattedAttrsStart
+	state.leadSep = h2.preformattedLeadSep
 	state.prefix.Write(h2.prefix)
 	state.appendAttrs(as)
-	h2.preformattedAttrsStart = state.bufStart
+	h2.preformattedLeadSep = state.leadSep
 	return h2
 }
 
@@ -344,10 +346,7 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 		}
 		state.appendAttr(Any(SourceKey, src))
 	}
-	// To inject prefix attrs before the message, we need to know where the message starts
-	// and whether the first attr appended from this point has skipped attrSep
-	// (it happens if there were no attrs yet and that attr has no Format).
-	state.bufStart = sepNone
+	// Prefix attrs are inserted before the message.
 	messagePos := state.buf.Len()
 	// message
 	key = MessageKey
@@ -362,26 +361,27 @@ func (h *LayoutHandler) Handle(_ context.Context, r Record) error {
 	state.groups = stateGroups // Restore groups passed to ReplaceAttrs.
 	state.appendNonBuiltIns(r)
 
+	nPrefix := len(h.opts.PrefixKeys)
+	iPrefix := state.layoutAttrs[:nPrefix].first()
+	leadSep := state.lineLeadSep(messagePos, iPrefix)
 	buf := state.buf
-	if state.layoutAttrs.hasPrefix(h.opts) {
+	if iPrefix >= 0 {
 		buf = buffer.New()
 		defer buf.Free()
-		// Insert prefix attrs before the message.
 		buf.Write((*state.buf)[:messagePos])
-		writeLayoutAttrs(buf, h.opts, h.opts.PrefixKeys, state.layoutAttrs)
-		// Write the message and the rest of non-suffix attrs.
-		if buf.Len() > 0 && state.bufStart == sepSkipped {
-			buf.WriteByte(attrSep)
-		}
+		writeLayoutAttrs(buf, state.layoutAttrs[:nPrefix])
 		buf.Write((*state.buf)[messagePos:])
 	}
-	// Append suffix attrs after all other attrs.
-	writeLayoutAttrs(buf, h.opts, h.opts.SuffixKeys, state.layoutAttrs[len(h.opts.PrefixKeys):])
+	writeLayoutAttrs(buf, state.layoutAttrs[nPrefix:])
 	buf.WriteByte('\n')
+	line := *buf
+	if leadSep {
+		line = line[1:]
+	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	_, err := h.w.Write(*buf)
+	_, err := h.w.Write(line)
 	return err
 }
 
@@ -396,24 +396,24 @@ type handleState struct {
 	slotBufs [][]byte
 	// prefixBuf is a pooled backing buffer for prefix, kept across reuses of handleState.
 	prefixBuf []byte
-	private   bool // are layoutAttrs private (see newPrivateHandleState)?
 	buf       *buffer.Buffer
-	freeBuf   bool // should buf be freed?
-	bufStart  startSepState
 	prefix    *buffer.Buffer // key prefix
 	groups    *[]string      // pool-allocated slice of active groups, for ReplaceAttr
+	private   bool           // are layoutAttrs private (see newPrivateHandleState)?
+	freeBuf   bool           // should buf be freed?
+	leadSep   bool           // buf has a leading attrSep
 }
 
 type origBuf struct {
-	buf      *buffer.Buffer
-	bufStart startSepState
+	buf     *buffer.Buffer
+	leadSep bool
 }
 
 // beginLayout redirects output to layoutAttrs[i], replacing its previous value.
 // Negative i means no redirection.
 // The returned value must be passed to endLayout.
 func (s *handleState) beginLayout(i int) origBuf {
-	orig := origBuf{buf: s.buf, bufStart: s.bufStart}
+	orig := origBuf{buf: s.buf, leadSep: s.leadSep}
 	switch {
 	case i < 0:
 	case s.private:
@@ -428,7 +428,7 @@ func (s *handleState) beginLayout(i int) origBuf {
 }
 
 // endLayout restores output redirected by beginLayout,
-// keeping the original bufStart state.
+// keeping the original leadSep.
 func (s *handleState) endLayout(i int, orig origBuf) {
 	if i < 0 {
 		return
@@ -437,32 +437,36 @@ func (s *handleState) endLayout(i int, orig origBuf) {
 		s.layoutAttrs[i] = s.slotBufs[i]
 	}
 	s.buf = orig.buf
-	s.bufStart = orig.bufStart
+	s.leadSep = orig.leadSep
 }
 
-// writeLayoutAttrs writes non-empty attrs (preformatted values of keys) to buf.
-func writeLayoutAttrs(buf *buffer.Buffer, opts *LayoutHandlerOptions, keys []string, attrs layoutAttrs) {
-	for i, k := range keys {
-		if a := attrs[i]; len(a) > 0 {
-			if _, ok := opts.Format[k]; buf.Len() > 0 && !ok {
-				buf.WriteByte(attrSep)
-			}
-			buf.Write(a)
-		}
+func writeLayoutAttrs(buf *buffer.Buffer, attrs layoutAttrs) {
+	for _, a := range attrs {
+		buf.Write(a)
 	}
+}
+
+// lineLeadSep reports whether the line assembled by Handle has a leading attrSep,
+// which must be dropped.
+// iPrefix is the index of the first non-empty prefix attr, or -1.
+// It must be called before suffix attrs are appended to buf.
+func (s *handleState) lineLeadSep(messagePos, iPrefix int) bool {
+	opts := s.h.opts
+	switch {
+	case messagePos == 0 && iPrefix >= 0:
+		return opts.slotLeadSep(opts.PrefixKeys[iPrefix])
+	case s.buf.Len() > 0:
+		return s.leadSep
+	}
+	i := s.layoutAttrs[len(opts.PrefixKeys):].first()
+	return i >= 0 && opts.slotLeadSep(opts.SuffixKeys[i])
 }
 
 func (s *handleState) appendNonBuiltIns(r Record) {
 	// preformatted Attrs
-	//nolint:nestif // Tracking the attrSep/bufStart state requires this branching.
 	if pfa := s.h.preformattedAttrs; len(pfa) > 0 {
-		if len(*s.buf) > 0 && s.h.preformattedAttrsStart == sepSkipped {
-			s.buf.WriteByte(attrSep)
-			if s.bufStart == sepNone {
-				s.bufStart = sepIncluded
-			}
-		} else if s.bufStart == sepNone {
-			s.bufStart = s.h.preformattedAttrsStart
+		if len(*s.buf) == 0 {
+			s.leadSep = s.h.preformattedLeadSep
 		}
 		s.buf.Write(pfa)
 	}
@@ -500,7 +504,7 @@ func (h *LayoutHandler) newHandleState(layoutAttrs layoutAttrs, buf *buffer.Buff
 	s.layoutAttrs = layoutAttrs
 	s.buf = buf
 	s.freeBuf = freeBuf
-	s.bufStart = sepNone
+	s.leadSep = false
 	s.prefix = (*buffer.Buffer)(&s.prefixBuf)
 	if h.opts.ReplaceAttr != nil {
 		s.groups = groupPool.Get().(*[]string)
@@ -648,7 +652,6 @@ func (s *handleState) key(key string) string {
 }
 
 func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
-	start := s.buf.Len()
 	s.buf.WriteString(format.Prefix)
 
 	switch {
@@ -670,10 +673,6 @@ func (s *handleState) appendFormat(format AttrFormat, key string, v Value) {
 	}
 
 	s.buf.WriteString(format.Suffix)
-
-	if s.bufStart == sepNone && s.buf.Len() > start {
-		s.bufStart = sepIncluded
-	}
 }
 
 //nolint:funlen,gocognit // Truncation with quoting/ellipsis/alignment inherently branches a lot.
@@ -750,15 +749,15 @@ func (s *handleState) appendError(err error) {
 	s.appendString(fmt.Sprintf("!ERROR:%v", err), noFormat)
 }
 
+// appendKey always writes attrSep before the key.
+// If it starts the output line, Handle drops it.
+// Such a leading attrSep is tracked by leadSep flags instead of checking for ' ',
+// because a Format Prefix may start with ' ' too.
 func (s *handleState) appendKey(key string) {
-	if len(*s.buf) > 0 {
-		s.buf.WriteByte(attrSep)
-		if s.bufStart == sepNone {
-			s.bufStart = sepIncluded
-		}
-	} else if s.bufStart == sepNone {
-		s.bufStart = sepSkipped
+	if len(*s.buf) == 0 {
+		s.leadSep = true
 	}
+	s.buf.WriteByte(attrSep)
 	s.appendString(key, noFormat)
 	s.buf.WriteByte('=')
 }

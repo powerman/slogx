@@ -22,6 +22,6 @@ func TestHandleState_FreeDropsLargeSlotBufs(tt *testing.T) {
 	bufs := s.slotBufs
 	s.free()
 
-	t.Equal(string(bufs[0]), "small=v")
+	t.Equal(string(bufs[0]), " small=v")
 	t.Zero(cap(bufs[1]))
 }

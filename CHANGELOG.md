@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-11-19
+
+### 🚀 Added
+
+- Add HandlerFromContext by @powerman in [0ecb37e]
+
+### 📚 Documentation
+
+- Clarify replacing BootstrapHandler after HandOffTo by @powerman in [6af3a82]
+
+[0.6.0]: https://github.com/powerman/slogx/compare/v0.5.2..v0.6.0
+[0ecb37e]: https://github.com/powerman/slogx/commit/0ecb37e044ae597b8f8ea498fa1068d74187e4f0
+[6af3a82]: https://github.com/powerman/slogx/commit/6af3a82b7a9cf5e8e25cf324783c7b1e6af64149
+
 ## [0.5.2] - 2026-11-19
 
 ### 🐛 Fixed
